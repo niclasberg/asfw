@@ -1,0 +1,13 @@
+{
+    "cmake.configureSettings": {
+        "LIB_ENABLE_UNITTEST": "ON"
+    },
+    "cmake.configureEnvironment": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "on"
+    },
+    "cmake.generator": "Ninja",
+    "files.associations": {
+        "type_traits": "cpp",
+        "tuple": "cpp"
+    }
+}

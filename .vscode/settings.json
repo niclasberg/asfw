@@ -1,0 +1,15 @@
+{
+    "cmake.configureSettings": {
+        "CMAKE_TOOLCHAIN_FILE": "${workspaceFolder}/CMake/GNU-ARM-Toolchain.cmake"
+    },
+    "cmake.configureEnvironment": {
+        "CMAKE_EXPORT_COMPILE_COMMANDS": "on"
+    },
+    "cmake.generator": "MinGW Makefiles",
+    "files.associations": {
+        "type_traits": "cpp",
+        "tuple": "cpp",
+        "array": "cpp",
+        "new": "cpp"
+    }
+}

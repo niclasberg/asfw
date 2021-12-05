@@ -1,0 +1,14 @@
+{
+    "version": "2.0.0",
+    "tasks": [
+        {
+            "label": "flash",
+            "type": "shell",
+            "command": "st-flash write ./build/stm32synth.bin 0x08000000",
+            "options": {
+                "cwd": "${workspaceRoot}"
+            },
+            "problemMatcher": []
+        }
+    ]
+}

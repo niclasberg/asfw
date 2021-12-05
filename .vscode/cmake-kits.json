@@ -1,0 +1,4 @@
+[{
+    "name": "C/C++ CMake-Kit for arm-none-eabi",
+    "toolchainFile":"${workspaceFolder}/CMake/GNU-ARM-Toolchain.cmake"
+}]
