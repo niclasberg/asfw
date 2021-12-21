@@ -8,6 +8,7 @@
 #include "interrupts.hpp"
 #include "peripheral_types.hpp"
 #include "reg/apply.hpp"
+#include "rational.hpp"
 
 namespace board
 {
@@ -18,44 +19,35 @@ namespace board
     using Stk = Peripheral<stk::tag,
         DeviceMemory<std::uint32_t, 0xE000E010, 0xE000E020>>;
 
-    namespace detail
-	{
-        template<std::intmax_t num, std::intmax_t den>
-        constexpr auto ratioToUint32(std::ratio<num, den>) -> uint32_<num / den>
-        {
-            return {};
-        }
-    }
-
     template<class ClockConfig>
     class Board
     {
     public:
         using InterruptController = InterruptControl;
 
-        constexpr auto getSystemClockFrequency() const
+        constexpr Rational<std::uint32_t> getSystemClockFrequency() const
         {
-            return detail::ratioToUint32(ClockConfig::getSystemClockFrequency());
+            return ClockConfig::getSystemClockFrequency();
         }
 
-        constexpr auto getAhbClockFrequency() const
+        constexpr Rational<std::uint32_t> getAhbClockFrequency() const
         {
-            return detail::ratioToUint32(ClockConfig::getAhbClockFrequency());
+            return ClockConfig::getAhbClockFrequency();
         }
 
-        constexpr auto getApb1ClockFrequency() const
+        constexpr Rational<std::uint32_t> getApb1ClockFrequency() const
         {
-            return detail::ratioToUint32(ClockConfig::getApb1ClockFrequency());
+            return ClockConfig::getApb1ClockFrequency();
         }
 
-        constexpr auto getApb2ClockFrequency() const
+        constexpr Rational<std::uint32_t> getApb2ClockFrequency() const
         {
-            return detail::ratioToUint32(ClockConfig::getApb2ClockFrequency());
+            return ClockConfig::getApb2ClockFrequency();
         }
 
-        constexpr auto getI2SClockFrequency() const
+        constexpr Rational<std::uint32_t> getI2SClockFrequency() const
         {
-            return detail::ratioToUint32(ClockConfig::getI2SClockFrequency());
+            return ClockConfig::getI2SClockFrequency();
         }
 
         template<int number>
@@ -75,14 +67,14 @@ namespace board
             return {};
         }
 
-        template<std::uint32_t tickFrequency_>
-        void enableSysTickIRQ(uint32_<tickFrequency_> tickFrequency)
+        template<std::uint32_t tickFrequency>
+        void enableSysTickIRQ(uint32_<tickFrequency>)
         {
-            auto ticksBetweenInterrupts = (getSystemClockFrequency() / tickFrequency) - uint32_c<1U>;
-            static_assert(ticksBetweenInterrupts > uint32_c<1U>, "Tick frequency is too low");
-            static_assert(ticksBetweenInterrupts < uint32_c<0xFFFFFF>, "Tick frequency is too high");
+            constexpr auto ticksBetweenInterrupts = (ClockConfig::getSystemClockFrequency() / tickFrequency) - 1U;
+            static_assert(ticksBetweenInterrupts > 1U, "Tick frequency is too low");
+            static_assert(ticksBetweenInterrupts < 0xFFFFFF, "Tick frequency is too high");
 
-            reg::write(Stk{}, stk::LOAD::RELOAD, ticksBetweenInterrupts);
+            reg::write(Stk{}, stk::LOAD::RELOAD, uint32_c<round(ticksBetweenInterrupts)>);
             reg::write(Stk{}, stk::VAL::CURRENT, uint32_c<0>);
             reg::apply(Stk{},
                 reg::set(stk::CTRL::ENABLE),
@@ -128,6 +120,10 @@ namespace board
         constexpr Dma1 getPeripheral(PeripheralTypes::tags::Dma<0>) const { return {}; }
         constexpr Dma2 getPeripheral(PeripheralTypes::tags::Dma<1>) const { return {}; }
 
+        constexpr Adc1 getPeripheral(PeripheralTypes::tags::Adc<0>) const { return {}; }
+        constexpr Adc2 getPeripheral(PeripheralTypes::tags::Adc<1>) const { return {}; }
+        constexpr Adc3 getPeripheral(PeripheralTypes::tags::Adc<2>) const { return {}; }
+
         template<int irqNo>
         async::EventEmitter getInterruptEvent(Interrupt<irqNo>)
         {
@@ -137,8 +133,23 @@ namespace board
 
     template<class ClockConfig>
     constexpr auto makeBoard(ClockConfig)
+        -> Board<ClockConfig>
     {
-        reg::write(Flash{}, flash::ACR::LATENCY, uint32_c<5>);
+        reg::apply(Flash{},
+            reg::clear(flash::ACR::DCEN), // Disable data cache
+            reg::clear(flash::ACR::ICEN)); // Disable instruction cache
+
+        // Reset cache
+        reg::apply(Flash{},
+            reg::set(flash::ACR::DCRST),
+            reg::set(flash::ACR::ICRST));
+
+        reg::apply(Flash{}, 
+            reg::write(flash::ACR::LATENCY, uint32_c<5>),
+            reg::set(flash::ACR::DCEN), // Enable data cache
+            reg::set(flash::ACR::ICEN), // Enable instruction cache
+            reg::set(flash::ACR::PRFTEN)); // Enable pre-fetch
+
         ClockConfig::apply(Rcc{});
         return Board<ClockConfig>{};
     }

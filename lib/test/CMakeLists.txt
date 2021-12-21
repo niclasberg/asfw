@@ -15,6 +15,7 @@ target_sources(run_tests
     PRIVATE
     main.cpp
     test_delegate.cpp
+    test_rational.cpp
     async/test_bind_back.cpp
     async/test_conditional.cpp
     async/test_event.cpp

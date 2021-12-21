@@ -1,6 +1,5 @@
 #pragma once
 #include "drivers/spi/detail/write.hpp"
-#include "../i2s_error.hpp"
 
 namespace drivers::i2s::detail
 {

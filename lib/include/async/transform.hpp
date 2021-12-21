@@ -30,7 +30,7 @@ namespace async
                 using Result = std::invoke_result_t<F, Values...>;
                 if constexpr (std::is_void_v<Result>)
                 {
-                    f_();
+                    f_(static_cast<Values &&>(values)...);
                     async::setValue(std::move(receiver_));
                 }
                 else
@@ -46,7 +46,7 @@ namespace async
                 using Result = std::invoke_result_t<F, Values...>;
                 if constexpr (std::is_void_v<Result>)
                 {
-                    f_();
+                    f_(static_cast<Values &&>(values)...);
                     async::setNext(receiver_);
                 }
                 else
@@ -144,6 +144,14 @@ namespace async
                 return async::connect(
                     std::move(parentSender_), 
                     TransformReceiver<std::remove_cvref_t<R>, F>{static_cast<R &&>(receiver), std::move(f_)});
+            }
+
+            template<Receiver R>
+            auto connect(R && receiver) const &
+            {
+                return async::connect(
+                    parentSender_, 
+                    TransformReceiver<std::remove_cvref_t<R>, F>{static_cast<R &&>(receiver), f_});
             }
 
         private:

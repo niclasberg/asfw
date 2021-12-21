@@ -37,6 +37,14 @@ namespace async
                 }
 
                 ConditionalOperation & op_;
+
+            private:
+                template<class Cpo, class ... Args>
+                friend auto tag_invoke(Cpo cpo, const Receiver & self, Args &&... args) 
+                    -> decltype(cpo(std::declval<const R&>(), static_cast<Args&&>(args)...))
+                {
+                    return cpo(self.op_.getReceiver(), static_cast<Args&&>(args)...);
+                }
             };
 
             using TrueOperation = ConnectResultType<STrue, Receiver>;
@@ -72,6 +80,11 @@ namespace async
                 }
             }
 
+            ConditionalOperation(const ConditionalOperation &) = delete;
+            ConditionalOperation & operator=(const ConditionalOperation &) = delete;
+
+            ~ConditionalOperation() { }
+
             void start()
             {
                 if (predicateValue_)
@@ -83,6 +96,9 @@ namespace async
                     falseOperation_.start();
                 }
             }
+
+            R & getReceiver() & { return innerReceiver_; }
+            const R & getReceiver() const & { return innerReceiver_; }
 
         private:
             bool predicateValue_;
@@ -150,7 +166,7 @@ namespace async
 
     inline constexpr struct conditional_t
     {
-        template<std::invocable F, Sender STrue, Sender SFalse>
+        template<std::predicate F, Sender STrue, Sender SFalse>
         auto operator()(F && predicate, STrue && senderIfTrue, SFalse && senderIfFalse) const
             -> detail::ConditionalSender<std::remove_cvref_t<F>, std::remove_cvref_t<STrue>, std::remove_cvref_t<SFalse>>
         {

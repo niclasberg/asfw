@@ -10,6 +10,7 @@ namespace PeripheralTypes
         template<std::uint8_t id> struct Spi {};
         template<std::uint8_t id> struct Uart {};
         template<std::uint8_t id> struct Dma {};
+        template<std::uint8_t id> struct Adc {};
         struct Exti {};
         struct SysCfg {};
     }
@@ -19,6 +20,7 @@ namespace PeripheralTypes
     template<std::uint8_t id> constexpr tags::Spi<id> SPI{};
     template<std::uint8_t id> constexpr tags::Uart<id> UART{};
     template<std::uint8_t id> constexpr tags::Dma<id> DMA{};
+    template<std::uint8_t id> constexpr tags::Adc<id> ADC{};
     constexpr tags::Exti EXTI{};
     constexpr tags::SysCfg SYSCFG{};
 }

@@ -3,13 +3,16 @@
 #include "dma_modes.hpp"
 #include "async/event.hpp"
 #include "../address.hpp"
-#include "../dma_error.hpp"
+#include "../dma_signal.hpp"
 #include "board/regmap/dma.hpp"
 #include "async/receiver.hpp"
 
 #include "reg/write.hpp"
 #include "reg/set.hpp"
 #include "reg/clear.hpp"
+#include "reg/apply.hpp"
+#include "reg/read.hpp"
+#include "reg/bit_is_set.hpp"
 
 namespace drivers::dma::detail
 {
@@ -100,33 +103,66 @@ namespace drivers::dma::detail
         , srcAddress_(srcAddress)
         , dstAddress_(dstAddress)
         , size_(size)
-        , receiver_(static_cast<R2&&>(receiver))
+        , handler_(static_cast<R2&&>(receiver))
         {
 
         }
 
-        void start()
+        DmaTransferOperation(const DmaTransferOperation&) = delete;
+        DmaTransferOperation & operator=(const DmaTransferOperation&) = delete;
+
+        bool start()
         {
             if (!interruptEvent_.subscribe(this))
             {
-                async::setError(std::move(receiver_), DmaError::BUSY);
-                return;
+                return false;
             }
 
-            // Clear interrupt flags
-            reg::set(DmaX{}, board::dma::IFCR::CTCIF[uint8_c<streamIndex>]);
-            reg::set(DmaX{}, board::dma::IFCR::CTEIF[uint8_c<streamIndex>]);
+            constexpr auto streamId = uint8_c<streamIndex>;
 
-            // Set address, transfer direction and size
-            setMemoryAddressAndDirection(DmaX{}, uint8_c<streamIndex>, srcAddress_, dstAddress_);
-            reg::write(DmaX{}, board::dma::NDTR::NDT[uint8_c<streamIndex>], size_);
+            // Clear interrupt flags
+            reg::apply(DmaX{}, 
+                reg::set(board::dma::IFCR::CTCIF[streamId]),
+                reg::set(board::dma::IFCR::CTEIF[streamId]),
+                reg::set(board::dma::IFCR::CDMEIF[streamId]),
+                reg::set(board::dma::IFCR::CFEIF[streamId]),
+                reg::set(board::dma::IFCR::CHTIF[streamId]));
+
+            // Set address, mode, transfer direction and size
+            setMemoryAddressAndDirection(DmaX{}, streamId, srcAddress_, dstAddress_);
+
+            if constexpr (mode == DmaMode::SINGLE_SHOT)
+            {
+                reg::apply(DmaX{},
+                    reg::clear(board::dma::CR::DBM[streamId]),
+                    reg::clear(board::dma::CR::CIRC[streamId]));
+            }
+            else if constexpr (mode == DmaMode::CIRCULAR)
+            {
+                reg::apply(DmaX{},
+                    reg::clear(board::dma::CR::DBM[streamId]),
+                    reg::set(board::dma::CR::CIRC[streamId]));
+            }
+            else 
+            {
+                reg::apply(DmaX{},
+                    reg::set(board::dma::CR::DBM[streamId]),
+                    reg::set(board::dma::CR::CIRC[streamId]));
+            }
 
             // Enable interrupts
-            reg::set(DmaX{}, board::dma::CR::TCIE[uint8_c<streamIndex>]);
-            reg::set(DmaX{}, board::dma::CR::TEIE[uint8_c<streamIndex>]);
+            reg::apply(DmaX{}, 
+                reg::set(board::dma::CR::TCIE[streamId]),
+                reg::set(board::dma::CR::TEIE[streamId]),
+                reg::clear(board::dma::CR::HTIE[streamId]),
+                reg::clear(board::dma::CR::DMEIE[streamId]));
+
+            reg::write(DmaX{}, board::dma::NDTR::NDT[streamId], size_);
 
             // Enable the dma stream
-            reg::set(DmaX{}, board::dma::CR::EN[uint8_c<streamIndex>]);
+            reg::set(DmaX{}, board::dma::CR::EN[streamId]);
+
+            return true;
         }
 
         void handleEvent()
@@ -136,36 +172,74 @@ namespace drivers::dma::detail
                 // Clear transfer error flag
                 reg::set(DmaX{}, board::dma::IFCR::CTEIF[uint8_c<streamIndex>]);
 
-                async::setError(std::move(receiver_), DmaError::TRANSFER_ERROR);
+                stop();
+                handler_(DmaSignal::TRANSFER_ERROR);
+                
+                return;
             }
 
             // TODO handle direct mode error, fifo error
 
-            // Transfer complete
-            if (reg::bitIsSet(DmaX{}, board::dma::ISR::TCIF[uint8_c<streamIndex>]))
+            // Transfer half complete
+            /*if(reg::bitIsSet(DmaX{}, board::dma::ISR::HTIF[uint8_c<streamIndex>]))
             {
-                // Clear interrupt flag
-                reg::set(DmaX{}, board::dma::IFCR::CTCIF[uint8_c<streamIndex>]);
+                reg::set(DmaX{}, board::dma::IFCR::CHTIF[uint8_c<streamIndex>]);
 
-                if constexpr (mode == DmaMode::NORMAL)
+                if constexpr (mode == DmaMode::SINGLE_SHOT)
                 {
-                    stop();
-                    async::setValue(std::move(receiver_));
+                    handler_(DmaSignal::TRANSFER_HALF_COMPLETE);
+                    reg::clear(DmaX{}, board::dma::CR::HTIE);
+                }
+                else if constexpr (mode == DmaMode::DOUBLE_BUFFERED)
+                {
+                    if (reg::read(DmaX{}, board::dma::CR::CT[uint8_c<streamIndex>]) == 0)
+                    {
+                        handler_(DmaSignal::TRANSFER_HALF_COMPLETE_MEMORY1);
+                    }
+                    else
+                    {
+                        handler_(DmaSignal::TRANSFER_HALF_COMPLETE);
+                    }
                 }
                 else
                 {
-                    // In circular and double buffer mode, we don't want to 
-                    // stop the DMA transfer at this point. Just send the next
-                    // value
-                    async::setNext(receiver_);
+                    handler_(DmaSignal::TRANSFER_HALF_COMPLETE);
+                }
+            }*/
+
+            // Transfer complete
+            if (reg::bitIsSet(DmaX{}, board::dma::ISR::TCIF[uint8_c<streamIndex>]))
+            {
+                reg::set(DmaX{}, board::dma::IFCR::CTCIF[uint8_c<streamIndex>]);
+
+                if constexpr (mode == DmaMode::SINGLE_SHOT)
+                {
+                    stop();
+                    handler_(DmaSignal::TRANSFER_COMPLETE);
+                }
+                else if constexpr (mode == DmaMode::DOUBLE_BUFFERED)
+                {
+                    if (reg::read(DmaX{}, board::dma::CR::CT[uint8_c<streamIndex>]) == 0)
+                    {
+                        handler_(DmaSignal::TRANSFER_COMPLETE_MEMORY1);
+                    }
+                    else
+                    {
+                        handler_(DmaSignal::TRANSFER_COMPLETE);
+                    }
+                }
+                else
+                {
+                    handler_(DmaSignal::TRANSFER_COMPLETE);
                 }
             }
         }
 
         void stop()
         {
-            reg::clear(DmaX{}, board::dma::CR::TCIE[uint8_c<streamIndex>]);
-            reg::clear(DmaX{}, board::dma::CR::TEIE[uint8_c<streamIndex>]);
+            reg::apply(DmaX{}, 
+                reg::clear(board::dma::CR::TCIE[uint8_c<streamIndex>]),
+                reg::clear(board::dma::CR::TEIE[uint8_c<streamIndex>]));
         }
 
     private:
@@ -173,7 +247,7 @@ namespace drivers::dma::detail
         SrcAddress srcAddress_;
         DstAddress dstAddress_;
         std::uint16_t size_;
-        R receiver_;
+        R handler_;
     };
 
     template<class DmaX, 
@@ -183,7 +257,7 @@ namespace drivers::dma::detail
         class DstAddress>
     struct TransferOperationFactory
     {
-        template<class R>
+        template<std::invocable<DmaSignal> R>
         auto operator()(R && receiver) const
             -> DmaTransferOperation<DmaX, streamIndex, mode, SrcAddress, DstAddress, std::remove_cvref_t<R>>
         {

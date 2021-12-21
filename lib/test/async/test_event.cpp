@@ -3,7 +3,7 @@
 
 TEST_CASE("Event")
 {
-    volatile async::Event event;
+    async::Event event;
     async::EventEmitter emitter{&event};
     bool handlerCalled = false;
     auto handler = async::makeEventHandler([&]() {

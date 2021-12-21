@@ -1,6 +1,7 @@
 #pragma once
 #include "board/regmap/spi.hpp"
-#include "drivers/dma/dma_like.hpp"
+#include "drivers/dma/dma_concepts.hpp"
+#include "drivers/spi/detail/write_dma.hpp"
 #include "async/event.hpp"
 #include "async/make_source_sender.hpp"
 #include "detail/write.hpp"
@@ -33,8 +34,11 @@ namespace drivers::i2s
                 });
         }
 
-        template<dma::DoubleBufferedDmaLike Dma>
-        auto writeMany(Dma & dma, std::uint16_t * data, std::uint32_t size)
+        template<dma::DmaLike Dma>
+        auto writeContinuous(Dma & dmaDevice, std::uint16_t * data[2], std::uint32_t size)
+        {
+            return spi::detail::writeDoubleBufferedDma(SpiX{}, dmaDevice, data, size);
+        }
 
         /*template<class DmaX, class DmaConfig>
         bool writeDma(dma::Dma<DmaX, DmaConfig> & dmaDev, std::uint16_t * data, std::uint32_t size);*/

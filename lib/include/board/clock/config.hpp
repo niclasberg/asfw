@@ -1,16 +1,15 @@
 #pragma once
 #include "board/regmap/rcc.hpp"
-#include "cratio.hpp"
+#include "rational.hpp"
+
 #include "reg/peripheral_operations.hpp"
+#include "reg/bit_is_set.hpp"
 #include "reg/set.hpp"
 #include "reg/clear.hpp"
 #include "reg/write.hpp"
 #include "reg/read.hpp"
 
-namespace board
-{
-
-namespace clock
+namespace board::clock
 {
     namespace detail
     {
@@ -36,14 +35,14 @@ namespace clock
         template<std::uint32_t hsiClockFrequency, std::uint32_t hseClockFrequency>
         struct InputClocks 
         { 
-            static constexpr auto getHsiClockFrequency() -> std::ratio<hsiClockFrequency>
+            static constexpr Rational<std::uint32_t> getHsiClockFrequency()
             {
-                return {};
+                return Rational{hsiClockFrequency};
             }
 
-            static constexpr auto getHseClockFrequency() -> std::ratio<hseClockFrequency>
+            static constexpr Rational<std::uint32_t> getHseClockFrequency()
             {
-                return {};
+                return Rational{hseClockFrequency};
             }
         };
 
@@ -56,35 +55,35 @@ namespace clock
             static_assert(sourceClockDivider >= 2 && sourceClockDivider <= 63,
                 "The PLL source clock divider must be between 2 and 63");
 
-            static constexpr auto getClockFrequency()
+            static constexpr Rational<std::uint32_t> getClockFrequency()
             {
                 if constexpr (pllSource == PllSrcVal::HSE)
                 {
-                    return hana::mult(std::ratio<1, sourceClockDivider>{}, InputClock::getHseClockFrequency());
+                    return InputClock::getHseClockFrequency() / sourceClockDivider;
                 }
                 else
                 {
-                    return hana::mult(std::ratio<1, sourceClockDivider>{}, InputClock::getHsiClockFrequency());
+                    return InputClock::getHsiClockFrequency() / sourceClockDivider;
                 }
             }
 
             static_assert(
-                    hana::greater_equal(PllInputConfig::getClockFrequency(), std::ratio<1000000>{}),
+                    PllInputConfig::getClockFrequency() >= 1'000'000U,
 					"PLL input clock frequency must be >= 1 MHz");
             static_assert(
-					hana::less_equal(PllInputConfig::getClockFrequency(), std::ratio<2000000>{}),
+					PllInputConfig::getClockFrequency() <= 2'000'000U,
 					"PLL input clock frequency must be <= 2 MHz");
 
             template<class Rcc>
             static void apply(Rcc & rccDev)
             {
                 // Enable the input clock generator
-                if(pllSource == PllSrcVal::HSE && !bitIsSet(rccDev, rcc::CR::HSEON))
+                if(pllSource == PllSrcVal::HSE && !reg::bitIsSet(rccDev, rcc::CR::HSEON))
                 {
                     reg::set(rccDev, rcc::CR::HSEON);
                     while (!reg::bitIsSet(rccDev, rcc::CR::HSERDY)) { }
                 }
-                if(pllSource == PllSrcVal::HSI && !bitIsSet(rccDev, rcc::CR::HSION))
+                if(pllSource == PllSrcVal::HSI && !reg::bitIsSet(rccDev, rcc::CR::HSION))
                 {
                     reg::set(rccDev, rcc::CR::HSION);
                     while (!reg::bitIsSet(rccDev, rcc::CR::HSIRDY)) { }
@@ -104,21 +103,21 @@ namespace clock
             static_assert(bool_c<divisor >= 2> && bool_c<divisor <= 7>, "The Pll I2S divisor must be between 2 and 7");
             static_assert(bool_c<multiplier >= 50> && bool_c<multiplier <= 432>, "The Pll I2S multiplier must be between 50 and 432");
 
-            static constexpr auto getClockFrequency()
+            static constexpr Rational<std::uint32_t> getClockFrequency()
             {
-                return hana::mult(PllInput::getClockFrequency(), std::ratio<multiplier, divisor>{});
+                return PllInput::getClockFrequency() * Rational<std::uint32_t>(multiplier, divisor);
             }
 
-            static constexpr auto getVCOClockFrequency()
+            static constexpr Rational<std::uint32_t> getVCOClockFrequency()
             {
-                return hana::mult(PllInput::getClockFrequency(), std::ratio<multiplier>{});
+                return PllInput::getClockFrequency() * multiplier;
             }
 
             static_assert(
-                hana::greater_equal(I2SPllConfig::getVCOClockFrequency(), std::ratio<100000000>{}),
+                I2SPllConfig::getVCOClockFrequency() >= 100'000'000U,
                 "I2S pll VCO frequency must be above 100 MHz (try increasing the multiplication factor");
             static_assert(
-                hana::less_equal(I2SPllConfig::getVCOClockFrequency(), std::ratio<432000000>{}),
+                I2SPllConfig::getVCOClockFrequency() <= 432'000'000U,
                 "I2S pll VCO frequency must be below 432 MHz (try decreasing the multiplication factor");
 
             template<class Rcc>
@@ -150,19 +149,19 @@ namespace clock
 
             static constexpr auto getClockFrequency()
             {
-                return hana::mult(PllInput::getClockFrequency(), std::ratio<multiplier, divisor>{});
+                return PllInput::getClockFrequency() * Rational<std::uint32_t>(multiplier, divisor);
             }
 
             static constexpr auto getVCOClockFrequency()
             {
-                return hana::mult(PllInput::getClockFrequency(), std::ratio<multiplier>{});
+                return PllInput::getClockFrequency() * multiplier;
             }
 
             static_assert(
-                hana::greater_equal(SystemPllConfig::getVCOClockFrequency(), std::ratio<100000000>{}),
+                SystemPllConfig::getVCOClockFrequency() >= 100'000'000U,
                 "System pll VCO frequency must be above 100 MHz (try increasing the multiplication factor");
             static_assert(
-                hana::less_equal(SystemPllConfig::getVCOClockFrequency(), std::ratio<432000000>{}),
+                SystemPllConfig::getVCOClockFrequency() <= 432'000'000U,
                 "System pll VCO frequency must be below 432 MHz (try decreasing the multiplication factor");
 
             template<class Rcc>
@@ -188,7 +187,7 @@ namespace clock
             std::enable_if_t<!IsVoidConfig<T>::value, decltype(T::getClockFrequency())> 
             getSystemClockFrequency()
             {
-                return {};
+                return T::getClockFrequency();
             }
 
             template<class T = SystemConfig>
@@ -204,7 +203,7 @@ namespace clock
             std::enable_if_t<!IsVoidConfig<T>::value, decltype(T::getClockFrequency())>
             getI2SClockFrequency()
             {
-                return {};
+                return T::getClockFrequency();
             }
 
             template<class T = I2SConfig>
@@ -224,29 +223,43 @@ namespace clock
             }
         };
 
-        template<HpreVal hpre> struct AhbPrescalerValue;
-        template<> struct AhbPrescalerValue<HpreVal::NO_DIV> : hana::type<std::ratio<1>> {};
-        template<> struct AhbPrescalerValue<HpreVal::DIV2> : hana::type<std::ratio<1, 2>> {};
-        template<> struct AhbPrescalerValue<HpreVal::DIV4> : hana::type<std::ratio<1, 4>> {};
-        template<> struct AhbPrescalerValue<HpreVal::DIV8> : hana::type<std::ratio<1, 8>> {};
-        template<> struct AhbPrescalerValue<HpreVal::DIV16> : hana::type<std::ratio<1, 16>> {};
-        template<> struct AhbPrescalerValue<HpreVal::DIV64> : hana::type<std::ratio<1, 64>> {};
-        template<> struct AhbPrescalerValue<HpreVal::DIV128> : hana::type<std::ratio<1, 128>> {};
-        template<> struct AhbPrescalerValue<HpreVal::DIV256> : hana::type<std::ratio<1, 256>> {};
-        template<> struct AhbPrescalerValue<HpreVal::DIV512> : hana::type<std::ratio<1, 512>> {};
+        template<HpreVal ahbPreScaler>
+        constexpr std::uint32_t getAhbClockDivider(constant_<ahbPreScaler>)
+        {
+            if constexpr (ahbPreScaler == HpreVal::NO_DIV) 
+                return 1;
+            else if constexpr (ahbPreScaler == HpreVal::DIV2)
+                return 2;
+            else if constexpr (ahbPreScaler == HpreVal::DIV4)
+                return 4;
+            else if constexpr (ahbPreScaler == HpreVal::DIV8)
+                return 8;
+            else if constexpr (ahbPreScaler == HpreVal::DIV16)
+                return 16;
+            else if constexpr (ahbPreScaler == HpreVal::DIV64)
+                return 64;
+            else if constexpr (ahbPreScaler == HpreVal::DIV128)
+                return 128;
+            else if constexpr (ahbPreScaler == HpreVal::DIV256)
+                return 256;
+            else if constexpr (ahbPreScaler == HpreVal::DIV512)
+                return 512;
+        }
 
-        template<HpreVal hpre>
-        constexpr auto ahbPrescalerValue = typename AhbPrescalerValue<hpre>::type{};
-
-        template<PpreVal ppre> struct ApbPrescalerValue;
-        template<> struct ApbPrescalerValue<PpreVal::NO_DIV> : std::ratio<1> {};
-        template<> struct ApbPrescalerValue<PpreVal::DIV2> : std::ratio<1, 2> {};
-        template<> struct ApbPrescalerValue<PpreVal::DIV4> : std::ratio<1, 4> {};
-        template<> struct ApbPrescalerValue<PpreVal::DIV8> : std::ratio<1, 8> {};
-        template<> struct ApbPrescalerValue<PpreVal::DIV16> : std::ratio<1, 16> {};
-
-        template<PpreVal ppre>
-        constexpr auto apbPrescalerValue = typename ApbPrescalerValue<ppre>::type{};
+        template<PpreVal apbPreScaler>
+        constexpr std::uint32_t getApbClockDivider(constant_<apbPreScaler>)
+        {
+            if constexpr (apbPreScaler == PpreVal::NO_DIV) 
+                return 1;
+            else if constexpr (apbPreScaler == PpreVal::DIV2)
+                return 2;
+            else if constexpr (apbPreScaler == PpreVal::DIV4)
+                return 4;
+            else if constexpr (apbPreScaler == PpreVal::DIV8)
+                return 8;
+            else if constexpr (apbPreScaler == PpreVal::DIV16)
+                return 16;
+        }
     }
 
     template<
@@ -261,45 +274,50 @@ namespace clock
         static_assert(!(systemClockSource == detail::SwVal::PLL && detail::IsVoidConfig<_PllConfig>::value), 
             "A pll config must be supplied when the system clock source is set to PLL");
 
-        static constexpr auto getSystemClockFrequency()
+        static constexpr Rational<std::uint32_t> getSystemClockFrequency()
         {
-            return hana::if_(
-                bool_c<systemClockSource == detail::SwVal::HSI>,
-                _InputClockFrequencies::getHsiClockFrequency(),
-                hana::if_(
-                    bool_c<systemClockSource == detail::SwVal::HSE>,
-                    _InputClockFrequencies::getHseClockFrequency(),
-                    _PllConfig::getSystemClockFrequency()));
+            if constexpr (systemClockSource == detail::SwVal::HSI)
+            {
+                return _InputClockFrequencies::getHsiClockFrequency();
+            }
+            else if constexpr (systemClockSource == detail::SwVal::HSE)
+            {
+                return _InputClockFrequencies::getHseClockFrequency();
+            }
+            else
+            {
+                return _PllConfig::getSystemClockFrequency();
+            }
         }
 
-        static constexpr auto getAhbClockFrequency()
+        static constexpr Rational<std::uint32_t> getAhbClockFrequency()
         {
-            return hana::mult(ClockConfig::getSystemClockFrequency(), detail::ahbPrescalerValue<ahbPreScaler>);
+            return ClockConfig::getSystemClockFrequency() / detail::getAhbClockDivider(constant_c<ahbPreScaler>);
         }
 
-        static constexpr auto getApb1ClockFrequency()
+        static constexpr Rational<std::uint32_t> getApb1ClockFrequency()
         {
-            return hana::mult(ClockConfig::getAhbClockFrequency(), detail::apbPrescalerValue<apb1PreScaler>);
+            return ClockConfig::getAhbClockFrequency() / detail::getApbClockDivider(constant_c<apb1PreScaler>);
         }
 
-        static constexpr auto getApb2ClockFrequency()
+        static constexpr Rational<std::uint32_t> getApb2ClockFrequency()
         {
-            return hana::mult(ClockConfig::getAhbClockFrequency(), detail::apbPrescalerValue<apb2PreScaler>);
+            return ClockConfig::getAhbClockFrequency() / detail::getApbClockDivider(constant_c<apb2PreScaler>);
         }
 
-        static constexpr auto getI2SClockFrequency()
+        static constexpr Rational<std::uint32_t> getI2SClockFrequency()
         {
             return _PllConfig::getI2SClockFrequency();
         }
 
         // Validate clock configuration
-        static_assert(hana::less_equal(ClockConfig::getSystemClockFrequency(), std::ratio<168000000>{}),
+        static_assert(ClockConfig::getSystemClockFrequency() <= 168'000'000U,
                 "System clock frequency must be below 168 MHz");
-        static_assert(hana::less_equal(ClockConfig::getAhbClockFrequency(), std::ratio<168000000>{}),
+        static_assert(ClockConfig::getAhbClockFrequency() <= 168'000'000U,
                 "AHB frequency must be below 168 MHz");
-        static_assert(hana::less_equal(ClockConfig::getApb1ClockFrequency(), std::ratio<42000000>{}),
+        static_assert(ClockConfig::getApb1ClockFrequency() <= 42'000'000U,
                 "APB1 frequency must be below 42 MHz");
-        static_assert(hana::less_equal(ClockConfig::getApb2ClockFrequency(), std::ratio<84000000>{}),
+        static_assert(ClockConfig::getApb2ClockFrequency() <= 84'000'000U,
                 "APB2 frequency must be below 84 MHz");
 
         template<class Rcc>
@@ -327,6 +345,4 @@ namespace clock
             reg::write(rccDev, board::rcc::CFGR::PPRE2, apb2PreScaler);
         }
     };
-}
-
 }

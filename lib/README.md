@@ -4,10 +4,6 @@ A library implementing drivers as composable, asynchronous operations for the st
 # TODO
 - Containers
     - Result/expected
-- Scheduler
-    - Implement dispatch queue
-    - Schedule_every algorithm
-    - Delay algorithm
 - Bind
     - Handle the monadic bind for `ManySender<Sender>` 
 - Add transformDone algorithm

@@ -53,7 +53,7 @@ namespace schedulers
         void poll()
         {
             // Run timed tasks first
-            auto currentTick = currentTick_;
+            /*auto currentTick = currentTick_;
             for (auto & task : futureTasks_)
             {
                 if (task.func && currentTick >= task.executeAtTick)
@@ -68,7 +68,7 @@ namespace schedulers
                         task.func.reset();
                     }
                 }
-            }
+            }*/
 
             // Run enqueued tasks
             if (headIndex_ != tailIndex_)
@@ -127,7 +127,7 @@ namespace schedulers
         -> CooperativeScheduler<16, 1, typename Board::InterruptController>
     {
         // Enable SysTick interrupt with a frequency of 1 ms
-        board.enableSysTickIRQ(uint32_c<1000>);
+        board.enableSysTickIRQ(uint32_c<1'000>);
 
         return {board.getInterruptEvent(board::Interrupts::SysTick)};
     }

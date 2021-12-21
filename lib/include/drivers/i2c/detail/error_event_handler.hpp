@@ -1,7 +1,7 @@
 #pragma once
 #include "../i2c_error.hpp"
 #include "board/regmap/i2c.hpp"
-#include "reg/peripheral_operations.hpp"
+#include "reg/bit_is_set.hpp"
 
 namespace drivers::i2c::detail
 {

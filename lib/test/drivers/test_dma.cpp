@@ -10,7 +10,7 @@
 using MockDma = MockPeripheral<board::dma::tag>;
 
 namespace {
-    volatile async::Event interruptEvent;
+    async::Event interruptEvent;
 }
 
 struct Peripherals
@@ -39,68 +39,65 @@ TEST_CASE("Dma")
     using namespace drivers;
     SECTION("Init defaults")
     {
-        dma::makeStream(mockBoard, dma::DMA_STREAM<0,1>);
+        dma::makeStream(mockBoard, dma::streamId<0,1>);
 
         REQUIRE(reg::read(MockDma{}, board::dma::CR::CHSEL[1_c]) == 0);
         REQUIRE(reg::read(MockDma{}, board::dma::CR::PL[1_c]) == 0);
         REQUIRE(reg::read(MockDma{}, board::dma::CR::PSIZE[1_c]) == 0);
-        REQUIRE(!bitIsSet(MockDma{}, board::dma::CR::DBM[1_c]));
-        REQUIRE(!bitIsSet(MockDma{}, board::dma::CR::CIRC[1_c]));
+        REQUIRE(!reg::bitIsSet(MockDma{}, board::dma::CR::DBM[1_c]));
+        REQUIRE(!reg::bitIsSet(MockDma{}, board::dma::CR::CIRC[1_c]));
         REQUIRE(reg::read(MockDma{}, board::dma::CR::DIR[1_c]) == 0);
     }
 
     SECTION("Init with 8 bit data size")
     {
-        dma::makeStream(mockBoard, dma::DMA_STREAM<0,3>, dma::DataSize::BITS8);
+        dma::makeStream(mockBoard, dma::streamId<0,3>, dma::DataSize::BITS8);
         REQUIRE(reg::read(MockDma{}, board::dma::CR::PSIZE[3_c]) == 0);
     }
 
     SECTION("Init with 16 bit data size")
     {
-        dma::makeStream(mockBoard, dma::DMA_STREAM<0, 4>, dma::DataSize::BITS16);
+        dma::makeStream(mockBoard, dma::streamId<0, 4>, dma::DataSize::BITS16);
         REQUIRE(reg::read(MockDma{}, board::dma::CR::PSIZE[4_c]) == 1);
     }
 
     SECTION("Init with 32 bit data size")
     {
-        dma::makeStream(mockBoard, dma::DMA_STREAM<0, 5>, dma::DataSize::BITS32);
+        dma::makeStream(mockBoard, dma::streamId<0, 5>, dma::DataSize::BITS32);
         REQUIRE(reg::read(MockDma{}, board::dma::CR::PSIZE[5_c]) == 2);
     }
 
-    SECTION("Init in normal mode")
+    /*SECTION("Init in normal mode")
     {
-        dma::makeStream(mockBoard, dma::DMA_STREAM<0, 0>, dma::Mode::NORMAL);
+        dma::makeStream(mockBoard, dma::streamId<0, 0>, dma::Mode::NORMAL);
         REQUIRE(!bitIsSet(MockDma{}, board::dma::CR::CIRC[0_c]));
         REQUIRE(!bitIsSet(MockDma{}, board::dma::CR::DBM[0_c]));
     }
     
     SECTION("Init in circular mode")
     {
-        dma::makeStream(mockBoard, dma::DMA_STREAM<0, 0>, dma::Mode::CIRCULAR);
+        dma::makeStream(mockBoard, dma::streamId<0, 0>, dma::Mode::CIRCULAR);
         REQUIRE(bitIsSet(MockDma{}, board::dma::CR::CIRC[0_c]));
         REQUIRE(!bitIsSet(MockDma{}, board::dma::CR::DBM[0_c]));
     }
 
     SECTION("Init in double buffer mode")
     {
-        dma::makeStream(mockBoard, dma::DMA_STREAM<0, 0>, dma::Mode::DOUBLE_BUFFER);
+        dma::makeStream(mockBoard, dma::streamId<0, 0>, dma::Mode::DOUBLE_BUFFER);
         REQUIRE(bitIsSet(MockDma{}, board::dma::CR::CIRC[0_c]));
         REQUIRE(bitIsSet(MockDma{}, board::dma::CR::DBM[0_c]));
-    }
+    }*/
 
     SECTION("Init with non-default options")
     {
-        dma::makeStream(mockBoard, dma::DMA_STREAM<0, 7>, 
+        dma::makeStream(mockBoard, dma::streamId<0, 7>, 
             dma::Channel::CHANNEL3, 
             dma::Priority::MEDIUM,
-            dma::DataSize::BITS32,
-            dma::Mode::DOUBLE_BUFFER);
+            dma::DataSize::BITS32);
 
         REQUIRE(reg::read(MockDma{}, board::dma::CR::CHSEL[7_c]) == 3);
         REQUIRE(reg::read(MockDma{}, board::dma::CR::PL[7_c]) == 1);
         REQUIRE(reg::read(MockDma{}, board::dma::CR::PSIZE[7_c]) == 2);
-        REQUIRE(bitIsSet(MockDma{}, board::dma::CR::DBM[7_c]));
-        REQUIRE(bitIsSet(MockDma{}, board::dma::CR::CIRC[7_c]));
     }
 
     SECTION("SingleShotRead for memory to peripheral")
@@ -109,18 +106,19 @@ TEST_CASE("Dma")
         const std::uint32_t dstAddress = 0x2345;
         const std::uint16_t size = 55;
 
-        bool receivedValue = false;
-        auto dmaDev = dma::makeStream(mockBoard, dma::DMA_STREAM<0,0>, dma::Mode::NORMAL);
+        dma::DmaSignal signal = dma::DmaSignal::TRANSFER_HALF_COMPLETE;
+        auto dmaDev = dma::makeStream(mockBoard, dma::streamId<0,0>);
 
-        auto op = async::connect(
-            dmaDev.transfer(dma::MemoryAddress{srcAddress}, dma::PeripheralAddress{dstAddress}, size),
-            async::receiveValue([&]() {
-                receivedValue = true;
-            }));
-        async::start(op);
+        auto op = dmaDev.transferSingle(dma::MemoryAddress{srcAddress}, dma::PeripheralAddress{dstAddress}, size)
+            ([&](dma::DmaSignal s) {
+                signal = s;
+            });
+        op.start();
 
         REQUIRE(reg::bitIsSet(mockDma, board::dma::CR::TCIE[0_c]));
         REQUIRE(reg::bitIsSet(mockDma, board::dma::CR::TEIE[0_c]));
+        REQUIRE(!reg::bitIsSet(MockDma{}, board::dma::CR::CIRC[0_c]));
+        REQUIRE(!reg::bitIsSet(MockDma{}, board::dma::CR::DBM[0_c]));
         REQUIRE(reg::read(mockDma, board::dma::M0AR::M0A[0_c]) == srcAddress);
         REQUIRE(reg::read(mockDma, board::dma::PAR::PA[0_c]) == dstAddress);
 

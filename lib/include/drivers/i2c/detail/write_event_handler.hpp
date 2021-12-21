@@ -3,6 +3,7 @@
 #include "reg/peripheral_operations.hpp"
 #include "board/regmap/i2c.hpp"
 #include "reg/unchecked_write.hpp"
+#include "reg/bit_is_set.hpp"
 
 namespace drivers::i2c::detail
 {

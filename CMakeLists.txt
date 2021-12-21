@@ -14,7 +14,7 @@ add_subdirectory(lib)
 set(EXECUTABLE ${PROJECT_NAME}.out)
 
 add_executable(${EXECUTABLE} 
-    projects/cs43l22/main.cpp
+    projects/vl6180/main.cpp
     stm32/syscalls.c
     stm32/interrupts.cpp
     stm32/startup_stm32f407vgtx.s)
@@ -35,7 +35,8 @@ target_link_options(${EXECUTABLE} PRIVATE
     -mthumb
     -mfpu=fpv4-sp-d16
     -mfloat-abi=hard
-    -specs=nano.specs
+    -specs=nano.specs 
+    -specs=nosys.specs
     -lc
     -lm
     -lnosys

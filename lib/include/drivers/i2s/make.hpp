@@ -151,7 +151,13 @@ namespace drivers::i2s
 
         // Configure peripheral
         spiX.enable();
-        detail::configureI2sClock(spiX, boardDescriptor.getI2SClockFrequency(), sampleFrequency, bitDepth, mcklOut);
+        detail::configureI2sClock(
+            spiX, 
+            constant_c<round(boardDescriptor.getI2SClockFrequency())>, 
+            sampleFrequency, 
+            bitDepth, 
+            mcklOut);
+            
         detail::initI2S(spiX, clockPolarity, i2sStandard, i2sMode, bitDepth, frameFormat);
 
         // Enable interrupt 

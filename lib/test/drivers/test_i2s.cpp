@@ -9,7 +9,7 @@ using MockSpi = MockPeripheral<board::spi::tag>;
 using MockGpio = MockPeripheral<board::gpio::tag>;
 
 namespace {
-    volatile async::Event spiInterrupt;
+    async::Event spiInterrupt;
 
     struct MockPeripherals
     {

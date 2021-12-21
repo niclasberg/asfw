@@ -63,40 +63,6 @@ namespace drivers::i2c
             F f_;
         };
 
-        /*template<class TValue, class F>
-        struct ReadValueTransformOperator
-        {
-            template<
-                class SenderType,
-                template<typename...> typename Variant,
-                template<typename...> typename Tuple>
-            using value_types = Variant<typename F::template ValueTypes<Tuple>>;
-            
-            template<class SenderType,template<typename...> typename Variant> 
-            using error_types = typename ParentSender::template error_types<Variant>;
-
-            void operator()(setValue_t)
-            {
-                f_(
-                    [this](auto, auto... values) { async::setValue(static_cast<R&&>(receiver), values...); },
-                    valueRef_);
-            }
-
-            template<class E>
-            void operator()(setError_t, E && e)
-            {
-                async::setError(static_cast<R&&>(receiver), static_cast<E&&>(e));
-            }
-
-            void operator()(setDone_t)
-            {
-                async::setDone(static_cast<R&&>(receiver));
-            }
-
-            F f_;
-            TValue & valueRef_;
-        };*/
-
         template<class ParentSender, class TValue, class F>
         struct ReadTransformSender
         {
@@ -109,7 +75,7 @@ namespace drivers::i2c
             using value_types = Variant<typename F::template ValueTypes<Tuple>>;
             
             template<template<typename...> typename Variant> 
-            using error_types = typename ParentSender::template error_types<Variant>;
+            using error_types = async::SenderErrorTypes<ParentSender, Variant>;
 
             template<class R>
             auto connect(R && receiver) && -> async::ConnectResultType<ParentSender, ReceiverType<R>>
@@ -138,6 +104,80 @@ namespace drivers::i2c
         class Serializer = detail::DefaultAddressSerializer>
     class I2cMemory
     {
+        template<class TOffset, class TValue>
+        struct TransferState
+        {
+            TransferState(TOffset offset)
+            {
+                Serializer::serializeAddress(offset, buffer);
+            }
+
+            TransferState(TOffset offset, TValue value)
+            {
+                Serializer::serializeAddress(offset, buffer);
+                *getValuePtr() = value;
+            }
+
+            TValue * getValuePtr()
+            {
+                return std::launder(reinterpret_cast<TValue *>(buffer + sizeof(TOffset)));
+            }
+
+            TValue getValue()
+            {
+                return *getValuePtr();
+            }
+
+            std::uint8_t * addressBuffer()
+            {
+                return buffer;
+            }
+
+            std::uint8_t * valueBuffer()
+            {
+                return buffer+sizeof(TOffset);
+            }
+
+            constexpr std::uint16_t addressSize() const
+            {
+                return sizeof(TOffset);
+            }
+
+            constexpr std::uint16_t valueSize() const
+            {
+                return sizeof(TValue);
+            }
+
+            constexpr std::uint16_t bufferSize() const
+            {
+                return addressSize() + valueSize();
+            }
+
+            std::uint8_t buffer[sizeof(TOffset)+sizeof(TValue)];
+        };
+
+        template<class TOffset, class TValue, class F>
+        struct ReadModifyWriteState : TransferState<TOffset, TValue>
+        {
+            template<class F2>
+            ReadModifyWriteState(F2 && f, TOffset offset)
+            : TransferState<TOffset, TValue>(offset)
+            , transform(static_cast<F2&&>(f))
+            {
+                
+            }
+
+            template<class F2>
+            ReadModifyWriteState(F2 && f, TOffset offset, TValue value)
+            : TransferState<TOffset, TValue>(offset, value)
+            , transform(static_cast<F2&&>(f))
+            {
+                
+            }
+
+            F transform;
+        };
+
     public:
         I2cMemory(I2cDevice & i2cDevice, std::uint8_t slaveAddress)
         : i2cDevice_(i2cDevice), slaveAddress_(slaveAddress)
@@ -148,16 +188,17 @@ namespace drivers::i2c
         template<class T, class TOffset, TOffset addr>
         async::Sender auto read(reg::FieldLocation<T, RegTag, reg::FieldOffset<TOffset, addr>>)
         {
-            // Use the first part of the internal buffer for 
-            // the address, and the second as an input buffer for reading
-            Serializer::serializeAddress(addr, transmitBuffer_);
-
-            return i2cDevice_.writeAndRead(slaveAddress_, 
-                        transmitBuffer_, sizeof(TOffset), 
-                        transmitBuffer_+sizeof(TOffset), sizeof(T))
-                    | async::transform([this]() -> T { 
-                        return *std::launder(reinterpret_cast<T *>(transmitBuffer_+sizeof(TOffset))); 
-                    });
+            return async::useState(
+                TransferState<TOffset, T>{addr},
+                [this](auto & state) {
+                    return 
+                        i2cDevice_.writeAndRead(slaveAddress_, 
+                            state.addressBuffer(), state.addressSize(), 
+                            state.valueBuffer(), state.valueSize())
+                        | async::transform([&]() -> T { 
+                            return state.getValue(); 
+                        });
+                });
         }
 
         template<class T, class TOffset, TOffset addr, class F>
@@ -165,44 +206,48 @@ namespace drivers::i2c
         {
             return 
                 async::useState(
-                    detail::ReadRequest<TOffset, T>{addr, T{}}, 
-                    [this, f = static_cast<F&&>(f)](auto & readRequest) {
+                    ReadModifyWriteState<TOffset, T, std::remove_cvref_t<F>>{static_cast<F&&>(f), addr}, 
+                    [this](auto & state) {
                         return 
                             detail::transformReadValue(
                                 i2cDevice_.writeAndRead(
-                                    slaveAddress_, 
-                                    reinterpret_cast<std::uint8_t *>(&readRequest.address), sizeof(TOffset), 
-                                    reinterpret_cast<std::uint8_t *>(&readRequest.value), sizeof(T)),
-                                readRequest.value,
-                                std::move(f));
+                                    slaveAddress_, state.addressBuffer(), state.addressSize(), state.valueBuffer(), state.valueSize()),
+                                *(state.getValuePtr()),
+                                std::move(state.transform));
                     });
         }
 
         template<class T, class TOffset, TOffset addr, class T2>
         async::Sender auto write(reg::FieldLocation<T, RegTag, reg::FieldOffset<TOffset, addr>>, T2 value)
         {
-            setBufferForWriting<TOffset, T>(addr, value);
-            return i2cDevice_.write(slaveAddress_, transmitBuffer_, sizeof(T)+sizeof(TOffset));
+            return async::useState(
+                TransferState<TOffset, T>{addr, static_cast<T>(value)},
+                [this](auto & state) {
+                    return i2cDevice_.write(slaveAddress_, state.buffer, state.bufferSize());
+                });
         }
 
         template<class T, class TOffset, TOffset addr, class F>
         async::Sender auto readModifyWrite(reg::FieldLocation<T, RegTag, reg::FieldOffset<TOffset, addr>>, F && f)
         {
-            Serializer::serializeAddress(addr, transmitBuffer_);
-
             return 
-                async::sequence(
-                    i2cDevice_.writeAndRead(slaveAddress_, 
-                        transmitBuffer_, sizeof(TOffset), 
-                        transmitBuffer_+sizeof(TOffset), sizeof(T))
-                    // Overwrite the value part of the buffer with the result of `f`
-                    | async::transform([this, ff=std::move(f)]() mutable {
-                        T * valuePtr = std::launder(reinterpret_cast<T *>(transmitBuffer_+sizeof(TOffset)));
-                        ff([valuePtr](T result) {
-                            *valuePtr = result;
-                        }, *valuePtr);
-                    }),
-                    i2cDevice_.write(slaveAddress_, transmitBuffer_, sizeof(T)+sizeof(TOffset)));
+                async::useState(
+                    ReadModifyWriteState<TOffset, T, std::remove_cvref_t<F>>{
+                        static_cast<F&&>(f), 
+                        addr}, 
+                    [this](auto & state) {
+                        return async::sequence(
+                            i2cDevice_.writeAndRead(slaveAddress_, 
+                                state.addressBuffer(), state.addressSize(), 
+                                state.valueBuffer(), state.valueSize())
+                            // Overwrite the value part of the buffer with the result of `f`
+                            | async::transform([&]() {
+                                state.transform([&](T result) {
+                                    *(state.getValuePtr()) = result;
+                                }, state.getValue());
+                            }),
+                            i2cDevice_.write(slaveAddress_, state.buffer, state.bufferSize()));
+                    });       
         }
 
         /*template<type addr, class F>
@@ -212,19 +257,7 @@ namespace drivers::i2c
         }*/
 
     private:
-        template<class TOffset, class T>
-        void setBufferForWriting(TOffset offset, T val)
-        {
-            static_assert((sizeof(TOffset) + sizeof(T)) < sizeof(transmitBuffer_),
-                "Register address and value does not fit into the internal buffer");
-            
-            // Message: address0 | ... | addressN | data0 | ... | dataM
-            Serializer::serializeAddress(offset, transmitBuffer_);
-            *std::launder(reinterpret_cast<T *>(transmitBuffer_ + sizeof(TOffset))) = val;
-        }
-
         I2cDevice & i2cDevice_;
         std::uint8_t slaveAddress_;
-        std::uint8_t transmitBuffer_[16];
     };
 }

@@ -5,10 +5,12 @@
 #include "reg/peripheral_operations.hpp"
 #include "board/regmap/uart.hpp"
 #include <cstdint>
+
 #include "reg/set.hpp"
 #include "reg/clear.hpp"
 #include "reg/apply.hpp"
 #include "reg/unchecked_write.hpp"
+#include "reg/bit_is_set.hpp"
 
 namespace drivers::uart
 {

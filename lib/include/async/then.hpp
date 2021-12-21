@@ -204,6 +204,12 @@ namespace async
                 return {std::move(sender_), std::move(continuationFactory_), static_cast<R&&>(r)};
             }
 
+            template<class R>
+            ThenOperation<S, F, std::remove_cvref_t<R>> connect(R && r) const &
+            {
+                return {sender_, continuationFactory_, static_cast<R&&>(r)};
+            }
+
         private:
             [[no_unique_address]] S sender_;
             [[no_unique_address]] F continuationFactory_;

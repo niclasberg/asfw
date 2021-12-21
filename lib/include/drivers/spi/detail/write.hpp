@@ -11,6 +11,8 @@
 #include "reg/unchecked_read.hpp"
 #include "reg/unchecked_write.hpp"
 
+#include "reg/bit_is_set.hpp"
+
 #include <type_traits>
 #include <cstdint>
 

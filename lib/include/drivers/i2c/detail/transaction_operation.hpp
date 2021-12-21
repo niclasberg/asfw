@@ -9,6 +9,7 @@
 #include "reg/set.hpp"
 #include "reg/clear.hpp"
 #include "reg/apply.hpp"
+#include "reg/bit_is_set.hpp"
 
 namespace drivers::i2c::detail
 {

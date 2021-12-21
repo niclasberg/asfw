@@ -73,7 +73,7 @@ namespace async
     {
         template<class S, class R>
             requires Sender<S> || ManySender<S>
-        constexpr auto operator()(S && sender, R && receiver) const
+        constexpr decltype(auto) operator()(S && sender, R && receiver) const
         {
             return static_cast<S&&>(sender).connect(static_cast<R&&>(receiver));
         }

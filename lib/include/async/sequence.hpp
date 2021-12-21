@@ -104,6 +104,15 @@ namespace async
             , senders_(std::move(senders))
             {
             }
+
+            template<class R2>
+            SequenceOperation(R2 && receiver, const std::tuple<Senders...> & senders)
+            : receiver_(static_cast<R2&&>(receiver))
+            , senders_(senders)
+            {
+            }
+
+            ~SequenceOperation() { }
             
             SequenceOperation(const SequenceOperation &) = delete;
             SequenceOperation & operator=(const SequenceOperation &) = delete;
@@ -153,6 +162,13 @@ namespace async
                 -> SequenceOperation<std::remove_cvref_t<R>, Senders...>
             {
                 return {static_cast<R&&>(receiver), std::move(senders_)};
+            }
+
+            template<class R>
+            auto connect(R && receiver) const &
+                -> SequenceOperation<std::remove_cvref_t<R>, Senders...>
+            {
+                return {static_cast<R&&>(receiver), senders_};
             }
 
             [[no_unique_address]] std::tuple<Senders...> senders_;

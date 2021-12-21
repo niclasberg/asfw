@@ -3,11 +3,12 @@
 #include "opt/option.hpp"
 #include "board/interrupts.hpp"
 #include <boost/hana/string.hpp>
+#include "rational.hpp"
 #include <vector>
 
 namespace detail
 {
-    constexpr auto AHB_FREQUENCY = hana::string_c<'A', 'H', 'B', 'F', 'R', 'E', 'Q'>;
+    constexpr auto  AHB_FREQUENCY = hana::string_c<'A', 'H', 'B', 'F', 'R', 'E', 'Q'>;
     constexpr auto APB1_FREQUENCY = hana::string_c<'A', 'P', 'B', '1', 'F', 'R', 'E', 'Q'>;
     constexpr auto APB2_FREQUENCY = hana::string_c<'A', 'P', 'B', '2', 'F', 'R', 'E', 'Q'>;
     constexpr auto I2S_FREQUENCY = hana::string_c<'I', '2', 'S', 'F', 'R', 'E', 'Q'>;
@@ -36,10 +37,10 @@ public:
 
     MockBoard() : interruptIsEnabled(128, false) { }
 
-    constexpr uint32_<apb1ClockFrequency> getApb1ClockFrequency() const { return {}; }
-    constexpr uint32_<apb2ClockFrequency> getApb2ClockFrequency() const { return {}; }
-    constexpr uint32_<ahbClockFrequency> getAhbClockFrequency() const { return {}; }
-    constexpr uint32_<i2sClockFrequency> getI2SClockFrequency() const { return {}; }
+    constexpr Rational<std::uint32_t> getApb1ClockFrequency() const { return Rational{apb1ClockFrequency}; }
+    constexpr Rational<std::uint32_t> getApb2ClockFrequency() const { return Rational{apb2ClockFrequency}; }
+    constexpr Rational<std::uint32_t> getAhbClockFrequency() const { return Rational{ahbClockFrequency}; }
+    constexpr Rational<std::uint32_t> getI2SClockFrequency() const { return Rational{i2sClockFrequency}; }
 
     template<int number>
     void enableIRQ(Interrupt<number>)

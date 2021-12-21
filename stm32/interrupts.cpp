@@ -3,7 +3,7 @@
 #include <board/interrupts.hpp>
 #include <array>
 
-std::array<volatile async::Event, 128> events = {};
+std::array<async::Event, 128> events = {};
 
 async::EventEmitter board::detail::getInterruptEvent(int irqNo)
 {
@@ -14,12 +14,7 @@ extern "C" void Default_Handler(void);
 
 #define MAKE_IRQ_HANDLER(NAME) \
     extern "C" void NAME##_IRQHandler(void) \
-    { \
-        if (events[hana::value(board::Interrupts::NAME)+1]) \
-            events[hana::value(board::Interrupts::NAME)+1].raise(); \
-        else \
-            Default_Handler(); \
-    }
+    { events[hana::value(board::Interrupts::NAME)+1].raise(); }
 
 extern "C" void SysTick_Handler()
 {

@@ -75,6 +75,11 @@ namespace drivers::i2s::detail
             // Set i2s mode instead of Spi
             reg::set(board::spi::I2SCFGR::I2SMOD));
 
+        // Disable DMA
+        reg::apply(SpiX{}, 
+            reg::clear(board::spi::CR2::TXDMAEN),
+            reg::clear(board::spi::CR2::RXDMAEN));
+
         // Enable
         reg::set(SpiX{}, board::spi::I2SCFGR::I2SE);  
     }

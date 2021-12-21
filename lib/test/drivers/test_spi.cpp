@@ -11,7 +11,7 @@ using MockSpi = MockPeripheral<board::spi::tag>;
 template<class ... Ts> struct TypeList;
 
 namespace {
-    volatile async::Event spiInterruptEvent;
+    async::Event spiInterruptEvent;
     struct MockPeripherals
     {
         constexpr MockSpi getPeripheral(PeripheralTypes::tags::Spi<0>) const { return {}; }

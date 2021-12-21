@@ -54,7 +54,7 @@ namespace async
         Event & operator=(const Event &) = delete;
         Event & operator=(Event &&) = delete;
 
-        void raise() volatile
+        void raise()
         {
             if (callback_)
             {
@@ -62,14 +62,14 @@ namespace async
             }
         }
 
-        operator bool() const volatile
+        operator bool() const
         {
             return callback_ != nullptr;
         }
 
     private:
-        void (* volatile callback_)(void *);
-        void * volatile context_;
+        void (* callback_)(void *);
+        void * context_;
 
         friend class EventEmitter;
     };
@@ -77,7 +77,7 @@ namespace async
     class EventEmitter
     {
     public:
-        EventEmitter(volatile Event * event) : event_(event) { }
+        EventEmitter(Event * event) : event_(event) { }
         EventEmitter(const EventEmitter &) = default;
         EventEmitter(EventEmitter &&) = default;
         EventEmitter & operator=(const EventEmitter &) = default;
@@ -119,7 +119,7 @@ namespace async
         }
 
     private:
-        volatile Event * event_;
+        Event * event_;
     };
 
     /*namespace detail

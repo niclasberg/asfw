@@ -93,7 +93,7 @@ public:
     }
 
     template<class RegTag, type addr>
-    constexpr INLINE type getAddress(reg::FieldLocation<type, RegTag, reg::FieldOffset<type, addr>>)
+    constexpr INLINE type getAddress(reg::FieldLocation<type, RegTag, reg::FieldOffset<type, addr>>) const
     {
         static_assert(std::is_same<tag, RegTag>::value, 
             "The tag of the field location did not match that of the peripheral");

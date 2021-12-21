@@ -4,7 +4,7 @@ namespace drivers::dma::detail
 {
     enum class DmaMode 
     {
-        NORMAL,
+        SINGLE_SHOT,
         CIRCULAR,
         DOUBLE_BUFFERED
     };

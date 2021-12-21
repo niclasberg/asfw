@@ -10,7 +10,7 @@ using MockExti = MockPeripheral<board::exti::tag>;
 using MockSysCfg = MockPeripheral<board::syscfg::tag>;
 
 namespace {
-    volatile async::Event interruptEvent;
+    async::Event interruptEvent;
 }
 
 struct MockPeripherals

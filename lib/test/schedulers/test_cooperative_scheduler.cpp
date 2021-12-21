@@ -4,7 +4,7 @@
 #include "../mocks/mock_board.hpp"
 
 namespace {
-    volatile async::Event interruptEvent;
+    async::Event interruptEvent;
 
     struct Peripherals
     {
@@ -20,7 +20,7 @@ TEST_CASE("Cooperative scheduler")
     SECTION("Should fullfill the scheduler concept")
     {
         STATIC_REQUIRE(async::Scheduler<
-            CooperativeScheduler<1, typename decltype(mockBoard)::InterruptController>>);
+            CooperativeScheduler<1, 1, typename decltype(mockBoard)::InterruptController>>);
     }
 
     SECTION("Should be able to run enqueued jobs")

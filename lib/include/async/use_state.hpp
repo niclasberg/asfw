@@ -15,10 +15,10 @@ namespace async
             using InnerOperation = ConnectResultType<InnerSender, R>;
 
         public:
-            template<class State2, class R2>
-            UseStateOperation(State2 && state, SenderFactory && senderFactory, R2 && receiver)
+            template<class State2, class SenderFactory2, class R2>
+            UseStateOperation(State2 && state, SenderFactory2 && senderFactory, R2 && receiver)
             : state_(static_cast<State2&&>(state))
-            , senderFactory_(static_cast<SenderFactory&&>(senderFactory))
+            , senderFactory_(static_cast<SenderFactory2&&>(senderFactory))
             , innerOperation_(
                 connect(senderFactory_(state_), static_cast<R2&&>(receiver)))
             {
@@ -63,6 +63,13 @@ namespace async
                 -> UseStateOperation<State, SenderFactory, std::remove_cvref_t<R>>
             {
                 return {std::move(state_), std::move(senderFactory_), static_cast<R&&>(receiver)};
+            }
+
+            template<class R>
+            auto connect(R && receiver) const &
+                -> UseStateOperation<State, SenderFactory, std::remove_cvref_t<R>>
+            {
+                return {state_, senderFactory_, static_cast<R&&>(receiver)};
             }
 
         private:

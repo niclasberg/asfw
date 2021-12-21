@@ -15,7 +15,7 @@ using MockExti = MockPeripheral<board::exti::tag>;
 using MockSysCfg = MockPeripheral<board::syscfg::tag>;
 
 namespace {
-    volatile async::Event gpioInterruptEvent;
+    async::Event gpioInterruptEvent;
 }
 
 struct Peripherals

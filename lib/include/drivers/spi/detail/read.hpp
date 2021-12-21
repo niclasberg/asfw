@@ -4,8 +4,10 @@
 #include "../spi_error.hpp"
 #include "board/regmap/spi.hpp"
 #include <cstdint>
+
 #include "reg/unchecked_read.hpp"
 #include "reg/set.hpp"
+#include "reg/bit_is_set.hpp"
 
 namespace drivers::spi
 {

@@ -1,6 +1,7 @@
 #pragma once
 #include "i2c_common.hpp"
 #include "reg/unchecked_write.hpp"
+#include "reg/bit_is_set.hpp"
 
 namespace drivers::i2c::detail
 {

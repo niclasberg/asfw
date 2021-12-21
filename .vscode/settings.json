@@ -10,6 +10,8 @@
         "type_traits": "cpp",
         "tuple": "cpp",
         "array": "cpp",
-        "new": "cpp"
-    }
+        "new": "cpp",
+        "cstdint": "cpp"
+    },
+    "cortex-debug.variableUseNaturalFormat": true
 }

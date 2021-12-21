@@ -76,16 +76,18 @@ namespace drivers
 
         async::Sender auto setHeadphoneVolume(std::uint8_t volume) 
         {
-            // 0x00 -> 0dB 
-            // 0xFF -> -0.5dB
-            // 0xFE -> -1dB
-            // ...
-            
+            // Register value | Gain    | Volume
+            // 0x00              0dB      0xFF
+            // 0xFF             -0.5dB    0xFE
+            // 0xFE             -1dB      0xFD
+            // ... 
+            // 0x01              muted    0x00
+            std::uint8_t value = volume == 0xFF ? 0x00 : volume + 1;
 
             using namespace cs43l22;
             return async::sequence(
-                reg::write(regmap::HeadphoneAVolume::HPAVOL, volume),
-                reg::write(regmap::HeadphoneBVolume::HPBVOL, volume));
+                reg::write(device_, regmap::HeadphoneAVolume::HPAVOL, value),
+                reg::write(device_, regmap::HeadphoneBVolume::HPBVOL, value));
         }
     private:
         i2c::I2cMemory<I2cDevice, cs43l22::regmap::tag> device_;

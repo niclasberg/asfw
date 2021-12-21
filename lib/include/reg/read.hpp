@@ -47,6 +47,5 @@ namespace reg
             return static_cast<T&&>(handler)
                 .readAndTransform(_Location{}, detail::makeReadAction<_Location, _Mask, _RWPolicy>());
         }
-
     } read{};
 }

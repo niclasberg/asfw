@@ -88,7 +88,7 @@ namespace drivers::uart
         // Initialize uart
         detail::initUart(
             uartX, 
-            board.getApb1ClockFrequency(),
+            uint32_c<round(board.getApb1ClockFrequency())>,
             opt::get(options, detail::BAUD_RATE), 
             opt::getOrDefault(options, detail::FRAME_FORMAT, detail::_8N1));
 

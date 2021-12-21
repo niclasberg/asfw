@@ -6,6 +6,7 @@ namespace drivers::spi
     {
         BUSY,
         MODE_FAULT,
-        OVERRUN
+        OVERRUN,
+        DMA_ERROR
     };
 }

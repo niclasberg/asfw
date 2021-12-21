@@ -68,6 +68,7 @@ namespace drivers::i2c
 
     template<class Board, std::uint8_t id, class ... Options>
     constexpr auto makeI2CMaster(Board boardDescriptor, DeviceId<id> deviceId, Options && ... opts)
+		-> I2cMaster<decltype(std::declval<Board>().getPeripheral(PeripheralTypes::I2C<id>))>
     {
 		auto i2cX = boardDescriptor.getPeripheral(PeripheralTypes::I2C<id>);
 
@@ -94,17 +95,18 @@ namespace drivers::i2c
 			gpio::PuPd::NO_PULL);
 
 		// Initialize clocks
-		auto pClkFreq = boardDescriptor.getApb1ClockFrequency();
-		static_assert(
-			hana::value(pClkFreq) >= uint32_c<2000000> && 
-			hana::value(pClkFreq) <= uint32_c<50000000>, 
-			"I2C requires a peripheral clock frequency between 2 and 50 MHz");
+		constexpr auto pClkFreq = boardDescriptor.getApb1ClockFrequency();
+		static_assert(pClkFreq <= 50'000'000U, 
+			"I2C requires a peripheral clock frequency less than or equal to 50 MHz");
+		static_assert(pClkFreq >= 2'000'000U, 
+			"I2C requires a peripheral clock frequency greater than or equal to 2 MHz");
 
 		i2cX.enable();
-		reg::write(i2cX, board::i2c::CR2::FREQ, pClkFreq / uint32_c<1000000>);
+		reg::write(i2cX, board::i2c::CR2::FREQ, 
+			uint32_c<round(pClkFreq / 1'000'000U)>);
         detail::initClocks(
 			i2cX, 
-			pClkFreq, 
+			constant_c<round(pClkFreq)>, 
 			opt::getOrDefault(options, detail::SCKL_FREQUENCY, uint32_c<100'000>));
 		reg::set(i2cX, board::i2c::CR1::PE);
 

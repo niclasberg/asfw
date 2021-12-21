@@ -15,12 +15,8 @@ namespace drivers::i2c::detail
         using error_types = Variant<I2cError>;
 
         template<class R>
-        auto connect(R && receiver) &&
-            -> TransactionOperation<
-                I2cX, 
-                ReadEventHandler<I2cX, false>, 
-                ErrorEventHandler<I2cX>,
-                std::remove_cvref_t<R>>
+        auto connect(R && receiver) 
+            -> TransactionOperation<I2cX, ReadEventHandler<I2cX, false>, ErrorEventHandler<I2cX>, std::remove_cvref_t<R>>
         {
             return {
                 static_cast<R&&>(receiver), 

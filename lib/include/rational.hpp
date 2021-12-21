@@ -1,62 +1,123 @@
 #pragma once
 #include <numeric>
 
-template<class T>
+template <class T>
 class Rational
 {
 public:
-    constexpr Rational() : num_(0), den_(1) { }
-    constexpr Rational(T n) : num_(n), den_(1) { }
-    constexpr Rational(T n, T m) : num_(n), den_(m) { }
-
-    constexpr Rational & operator+=(T i) 
-    { 
-        num_ += i * den_; 
-        return *this; 
-    }
-
-    constexpr Rational & operator-=(T i) 
-    { 
-        num_ -= i * den_; 
-        return *this; 
-    }
-
-    constexpr Rational & operator*=(T i)
+    constexpr Rational() : num(0), den(1) {}
+    constexpr explicit Rational(T n) : num(n), den(1) {}
+    
+    constexpr Rational(T n, T m) : num(n), den(m)
     {
-        T gcd = std::gcd(i, den_);
-        num_ *= i / gcd;
-        den_ /= gcd;
-
-        return *this;
+        
     }
 
-    constexpr Rational & operator/=(T i)
+    constexpr Rational(const Rational &) = default;
+
+    // Scalar-rational comparion operators
+    constexpr bool operator==(T s) const
     {
-        if (num_ == 0) 
-        {
-            return *this;
-        }
-
-        T gcd = std::gcd(num_, i);
-        num_ *= i / gcd;
-        den_ /= gcd;
-
-        return *this;
+        return num == (s * den);
     }
+
+    constexpr bool operator<(T s) const
+    {
+        // FIXME this only works for positive numbers
+        return (num / den) < s;
+    }
+
+    constexpr bool operator<=(T s) const 
+    { 
+        return (operator<(s) || operator==(s));
+    }
+
+    constexpr bool operator>(T s) const 
+    { 
+        return !(operator<(s) || operator==(s));
+    }
+
+    constexpr bool operator>=(T s) const 
+    { 
+        return !(operator<(s));
+    }
+
+    const T num;
+    const T den;
 
 private:
-#define MAKE_BINARY_OP(OP) \
-    friend constexpr Rational operator##OP(T s, Rational r) { return r OP= s; } \
-    friend constexpr Rational operator##OP(Rational r, T s) { return r OP= s; } \
-    friend constexpr Rational operator##OP(Rational r1, const Rational & r2) { return r1 OP= r2; }
+    friend constexpr Rational operator+(Rational r, T s) 
+    { 
+        return Rational<T>{
+            r.num + s * r.den, 
+            r.den};
+    }
 
-    MAKE_BINARY_OP(+)
-    MAKE_BINARY_OP(-)
-    MAKE_BINARY_OP(*)
-    MAKE_BINARY_OP(/)
+    friend constexpr Rational operator+(T s, Rational r) 
+    { 
+        return r + s; 
+    }
 
-#undef MAKE_BINARY_OP
+    friend constexpr Rational operator-(Rational r, T s) 
+    { 
+        return Rational<T>{
+            r.num - s * r.den,
+            r.den}; 
+    }
 
-    T num_;
-    T den_;
+    friend constexpr Rational operator-(T s, Rational r) 
+    { 
+        return Rational{
+            s * r.den - r.num,
+            r.den}; 
+    }
+
+    friend constexpr Rational operator*(Rational r, T s) 
+    { 
+        const T gcd = std::gcd(s, r.den);
+        return Rational{
+            r.num * (s / gcd), 
+            r.den / gcd};
+    }
+
+    friend constexpr Rational operator*(T s, Rational r) 
+    { 
+        return r * s;
+    }
+
+    friend constexpr Rational operator/(Rational r, T s) 
+    { 
+        if (r.num == 0)
+        {
+            return r;
+        }
+
+        const T gcd = std::gcd(r.num, s);
+        return Rational{
+            r.num / gcd,
+            r.den * (s / gcd)};
+    }
+
+    friend constexpr Rational operator*(Rational lhs, const Rational &rhs)
+    {
+        const T gcd1 = std::gcd(lhs.num, rhs.den);
+        const T gcd2 = std::gcd(rhs.num, lhs.den);
+
+        return Rational{
+            (lhs.num / gcd1) * (rhs.num / gcd2),
+            (lhs.den / gcd2) * (rhs.den / gcd1)};
+    }
+
+    friend constexpr Rational operator/(Rational lhs, const Rational &rhs)
+    {
+        return Rational{
+           lhs.num *  rhs.den,
+           lhs.den * rhs.num};
+    }
 };
+
+template<class T>
+constexpr T round(const Rational<T> & r)
+{
+    return ((T(10) * r.num + T(5)) / r.den) / T(10);
+}

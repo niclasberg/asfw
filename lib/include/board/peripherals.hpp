@@ -139,16 +139,16 @@ namespace board
 			detail::PeriphCtrl<
 				decltype(rcc::APB1ENR::I2C1EN),
 				decltype(rcc::APB1RSTR::I2C1RST)>> {};
-	using I2C2 = Peripheral<i2c::tag,
+	struct I2C2 : Peripheral<i2c::tag,
 			DeviceMemory<uint32_t, 0x40005800, 0x40005BFF>,
 			detail::PeriphCtrl<
 				decltype(rcc::APB1ENR::I2C2EN),
-				decltype(rcc::APB1RSTR::I2C2RST)>>;
-	using I2C3 = Peripheral<i2c::tag,
+				decltype(rcc::APB1RSTR::I2C2RST)>> {};
+	struct I2C3 : Peripheral<i2c::tag,
 			DeviceMemory<uint32_t, 0x40005C00, 0x40005FFF>,
 			detail::PeriphCtrl<
 				decltype(rcc::APB1ENR::I2C3EN),
-				decltype(rcc::APB1RSTR::I2C3RST)>>;
+				decltype(rcc::APB1RSTR::I2C3RST)>> {};
 
     // Peripherals hanging on the APB2 bus
 	using Adc1 = Peripheral<
