@@ -13,6 +13,8 @@ namespace drivers::i2c::detail
         template<template<typename ...> class Variant, template<typename ...> class Tuple>
         using value_types = Variant<Tuple<>>;
         template<template<typename ...> class Variant>
+        using signal_types = Variant<>;
+        template<template<typename ...> class Variant>
         using error_types = Variant<I2cError>;
 
         template<class R>

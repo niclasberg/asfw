@@ -19,6 +19,11 @@ namespace cont
         BoxUnion() {}
         ~BoxUnion() {}
 
+        BoxUnion(const BoxUnion &) = delete;
+        BoxUnion(BoxUnion &&) = delete;
+        BoxUnion& operator=(const BoxUnion &) = delete;
+        BoxUnion& operator=(BoxUnion &&) = delete;
+
         template<class T, class ... Args>
             requires tmp::containsType<T, Ts...>
         [[maybe_unused]] T & construct(union_<T>, Args && ... args)

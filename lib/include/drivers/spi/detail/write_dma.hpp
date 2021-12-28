@@ -58,6 +58,13 @@ namespace drivers::spi::detail
             reg::set(SpiX{}, board::spi::CR2::TXDMAEN);
         }
 
+        void stop()
+        {
+            reg::clear(SpiX{}, board::spi::CR2::TXDMAEN);
+            transfer_.stop();
+            async::setDone(std::move(receiver_));
+        }
+
     private:
         void setBuffer0Next()
         {
@@ -73,17 +80,12 @@ namespace drivers::spi::detail
 
         void setBuffer0NextImpl()
         {
-            async::setNext(receiver_, buffer0_);
+            async::setSignal(receiver_, buffer0_);
         }
 
         void setBuffer1NextImpl()
         {
-            async::setNext(receiver_, buffer1_);
-        }
-
-        void stop()
-        {
-            reg::clear(SpiX{}, board::spi::CR2::TXDMAEN);
+            async::setSignal(receiver_, buffer1_);
         }
 
         DmaTransfer transfer_;
@@ -96,7 +98,10 @@ namespace drivers::spi::detail
     struct WriteDmaSender
     {
         template<template<typename...> class Variant, template<typename...> class Tuple>
-        using value_types = Variant<Tuple<DataType *>>;
+        using value_types = Variant<Tuple<>>;
+
+        template<template<typename...> class Variant>
+        using signal_types = Variant<DataType *>;
 
         template<template<typename...> class Variant>
         using error_types = Variant<SpiError>;
@@ -127,15 +132,4 @@ namespace drivers::spi::detail
             data[1]
         };
     }
-
-    /*template<class SpiX, class DataType, dma::DmaTransferFactory TransferFactory>
-    auto writeDma(SpiX, TransferFactory && transferFactory, DataType * data[2])
-    {
-        return async::makeSourceManySender<spi::SpiError, std::uint16_t *>(
-            [transferFactory = static_cast<TransferFactory&&>(transferFactory), data]<typename R>(R && receiver) mutable
-                -> WriteDmaOperation<SpiX, DataType, std::remove_cvref_t<TransferFactory>, std::remove_cvref_t<R>>
-            {
-                return {std::move(transferFactory), static_cast<R&&>(receiver), data};
-            });
-    }*/
 }

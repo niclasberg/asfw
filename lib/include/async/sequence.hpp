@@ -7,6 +7,7 @@
 #include "tmp/parameter_packs.hpp"
 #include "tmp/type_list.hpp"
 #include "tmp/tag_invoke.hpp"
+#include "util.hpp"
 #include <utility>
 
 namespace async
@@ -35,6 +36,12 @@ namespace async
                     op_.template completeStep<I>();
                     op_.template startStep<I+1>();
                 }
+            }
+
+            template<class S>
+            void setSignal(S && signal)
+            {
+                async::setSignal(op_.getReceiver(), static_cast<S&&>(signal));
             }
 
             template<class E>
@@ -80,7 +87,6 @@ namespace async
             template<std::size_t I>
             void startStep()
             {
-                i = I;
                 auto & nextOp = operationVariant_.constructWith([this]() {
                     return connect(
                         std::move(std::get<I>(senders_)), 
@@ -136,7 +142,6 @@ namespace async
             [[no_unique_address]] R receiver_;
             [[no_unique_address]] std::tuple<Senders...> senders_;
             [[no_unique_address]] UnionType operationVariant_;
-            volatile int i = 0;
         };
 
         template<class ... Senders>
@@ -148,7 +153,10 @@ namespace async
             using value_types = typename tmp::LastType<Senders...>::template value_types<Variant, Tuple>;
 
             template<template<typename ...> typename Variant>
-            using error_types = typename tmp::unique_<tmp::concat_<SenderErrorTypes<Senders, tmp::TypeList>...>>::template apply<Variant>;
+            using error_types = CombinedSenderErrorTypes<Variant, Senders...>;
+
+            template<template<typename...> typename Variant>
+            using signal_types = CombinedSenderSignalTypes<Variant, Senders...>;
 
             template<class ... Senders2>
             SequenceSender(Senders2 && ... senders)
@@ -177,7 +185,7 @@ namespace async
 
     inline constexpr struct sequence_t
     {
-        template<class ... Senders>
+        template<Sender ... Senders>
         auto operator()(Senders &&... senders) const
             -> detail::SequenceSender<std::remove_cvref_t<Senders>...>
         {

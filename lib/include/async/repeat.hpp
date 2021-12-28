@@ -30,6 +30,12 @@ namespace async
                     }
                 }
 
+                template<class T>
+                void setSignal(T && signal) 
+                {
+                    async::setSignal(op_.getReceiver(), static_cast<T&&>(signal));
+                }
+
                 template<class E>
                 void setError(E && e) && 
                 {
@@ -72,6 +78,7 @@ namespace async
 
             RepeatOperation(const RepeatOperation &) = delete;
             RepeatOperation & operator=(const RepeatOperation &) = delete;
+            ~RepeatOperation() { }
 
             void start()
             {
@@ -109,6 +116,9 @@ namespace async
         public:
             template<template<typename...> class Variant, template<typename...> class Tuple>
             using value_types = Variant<Tuple<>>;
+
+            template<template<typename...> class Variant>
+            using signal_types = SenderSignalTypes<S, Variant>;
 
             template<template<typename...> class Variant>
             using error_types = SenderErrorTypes<S, Variant>;

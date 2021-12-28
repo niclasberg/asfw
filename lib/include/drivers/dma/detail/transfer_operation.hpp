@@ -240,6 +240,8 @@ namespace drivers::dma::detail
             reg::apply(DmaX{}, 
                 reg::clear(board::dma::CR::TCIE[uint8_c<streamIndex>]),
                 reg::clear(board::dma::CR::TEIE[uint8_c<streamIndex>]));
+            
+            interruptEvent_.unsubscribe();
         }
 
     private:

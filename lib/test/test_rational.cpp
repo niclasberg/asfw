@@ -4,14 +4,6 @@
 
 TEST_CASE("Rational")
 {
-    SECTION("Constructing from a rational should the input to normalized form")
-    {
-        auto sut = Rational<unsigned int>{4U, 2U};
-
-        REQUIRE(sut.num == 2U);
-        REQUIRE(sut.den == 1U);
-    }
-
     SECTION("Scalar-rational equality comparison operator")
     {
         REQUIRE(Rational<std::uint32_t>{0} == 0);

@@ -1,12 +1,12 @@
 #pragma once
 #include "sender.hpp"
 #include "scheduler.hpp"
+#include <tuple>
 
 namespace async
 {
-    enum class ExecutionStatus
+    enum class CompletionStatus
     {
-        RUNNING,
         COMPLETED_WITH_VALUE,
         COMPLETED_WITH_ERROR,
         COMPLETED_WITH_DONE
@@ -14,23 +14,30 @@ namespace async
 
     namespace detail
     {
-        template<Scheduler S>
+        struct ExecutionState
+        {
+            CompletionStatus status = CompletionStatus::COMPLETED_WITH_VALUE;
+            std::uint8_t numberOfCompletedTasks = 0;
+        };
+
+        template<class S>
         class ExecuteSyncReceiver
         {
         public:
-            ExecuteSyncReceiver(S & scheduler, ExecutionStatus & status)
+            ExecuteSyncReceiver(S & scheduler, ExecutionState & status)
             : scheduler_(scheduler)
-            , status_(status)
+            , state_(status)
             {
 
             }
 
             void setValue() &&
             {
-                status_ = ExecutionStatus::COMPLETED_WITH_VALUE;
+                state_.numberOfCompletedTasks += 1;
             }
 
-            void setNext()
+            template<class T>
+            void setSignal(T &&)
             {
                 // Do nothing
             }
@@ -38,12 +45,17 @@ namespace async
             template<class E>
             void setError(E && e) &&
             {
-                status_ = ExecutionStatus::COMPLETED_WITH_ERROR;
+                state_.numberOfCompletedTasks += 1;
+                state_.status = CompletionStatus::COMPLETED_WITH_ERROR;
             }
 
             void setDone() && 
             {
-                status_ = ExecutionStatus::COMPLETED_WITH_DONE;
+                state_.numberOfCompletedTasks += 1;
+                if (state_.status != CompletionStatus::COMPLETED_WITH_ERROR)
+                {
+                    state_.status = CompletionStatus::COMPLETED_WITH_DONE;
+                }
             }
 
         private:
@@ -53,32 +65,75 @@ namespace async
             }
 
             S & scheduler_;
-            ExecutionStatus & status_;
+            ExecutionState & state_;
+        };
+
+        template<class S, class ... Senders>
+        class OperationTuple;
+
+        template<class S, class Sender, class ... TailSenders>
+        class OperationTuple<S, Sender, TailSenders...> : OperationTuple<S, TailSenders...>
+        {
+        public:
+            template<class Sender2, class ...TailSenders2>
+            OperationTuple(S & scheduler, ExecutionState & state, Sender2 && sender, TailSenders2 && ... tailSenders)
+            : OperationTuple<S, TailSenders...>(scheduler, state, static_cast<TailSenders2&&>(tailSenders)...)
+            , op_(async::connect(static_cast<Sender2&&>(sender), ExecuteSyncReceiver<S>{scheduler, state}))
+            {
+
+            }
+
+            void start()
+            {
+                op_.start();
+                OperationTuple<S, TailSenders...>::start();
+            }
+
+        private:
+            ConnectResultType<Sender, ExecuteSyncReceiver<S>> op_;
+        };
+
+        template<class S>
+        class OperationTuple<S>
+        {
+        public:
+            OperationTuple(S &, ExecutionState &) 
+            {
+
+            }
+
+            void start() { }
         };
     }
 
     inline constexpr struct executeSync_t final
     {
-        template<Scheduler Sched, class S>
-            requires (Sender<S> || ManySender<S>)
-        ExecutionStatus operator()(Sched & scheduler, S && sender) const
+        template<Scheduler Sched, Sender ... Senders>
+        CompletionStatus operator()(Sched & scheduler, Senders && ... senders) const
         {
-            auto executionStatus = ExecutionStatus::RUNNING;
+            using OperationTupleType = detail::OperationTuple<std::remove_cvref_t<Sched>, std::remove_cvref_t<Senders>...>;
 
-            auto op = connect(
-                static_cast<S&&>(sender),
-                detail::ExecuteSyncReceiver<std::remove_cvref_t<Sched>>{scheduler, executionStatus});
+            detail::ExecutionState executionState;
 
-            auto startOp = [&]() { async::start(op); };
+            auto operationTuple = OperationTupleType(
+                scheduler,
+                executionState,
+                static_cast<Senders&&>(senders)...
+            );
 
-            scheduler.post(&startOp);
+            auto startOperations = [&]() 
+            { 
+                operationTuple.start();
+            };
 
-            while (executionStatus == ExecutionStatus::RUNNING)
+            scheduler.post(&startOperations);
+
+            while (executionState.numberOfCompletedTasks < sizeof...(Senders))
             {
                 scheduler.poll();
             }
 
-            return executionStatus;
+            return executionState.status;
         }
     } executeSync {};
 }

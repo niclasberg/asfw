@@ -15,6 +15,9 @@ namespace async
             using value_types = Variant<Tuple<Ts...>>;
             
             template<template<typename...> typename Variant> 
+            using signal_types = Variant<>;
+
+            template<template<typename...> typename Variant> 
             using error_types = Variant<>;
 
             template<class Receiver>
@@ -31,15 +34,13 @@ namespace async
                 }
             };
 
-            template<class R>
-                requires ManyReceiverOf<R, Ts...>
+            template<ReceiverOf<Ts...> R>
             Operation<std::decay_t<R>> connect(R && receiver) &&
             {
                 return {static_cast<R&&>(receiver), std::move(values)};
             }
 
-            template<class R>
-                requires ManyReceiverOf<R, Ts...>
+            template<ReceiverOf<Ts...> R>
             Operation<std::decay_t<R>> connect(R && receiver) const &
             {
                 return {static_cast<R&&>(receiver), values};
@@ -48,15 +49,16 @@ namespace async
             std::tuple<Ts...> values;
         };
 
-        template<class ... Ts>
+        /*template<class ... Ts>
         struct JustNextSender
         {
             template<
                 template<typename...> typename Variant,
                 template<typename...> typename Tuple>
             using next_types = Variant<Tuple<Ts...>>;
-            template<template<typename...> typename Tuple> 
-            using error_types = Tuple<>;
+
+            template<template<typename...> typename Variant> 
+            using error_types = Variant<>;
 
             template<class Receiver>
             struct Operation
@@ -81,7 +83,7 @@ namespace async
             }
 
             std::tuple<Ts...> values;
-        };
+        };*/
 
         template<class E>
         struct JustErrorSender
@@ -90,10 +92,10 @@ namespace async
                 template<typename...> typename Variant,
                 template<typename...> typename Tuple>
             using value_types = Variant<Tuple<>>;
-            template<
-                template<typename...> typename Variant,
-                template<typename...> typename Tuple>
-            using next_types = Variant<Tuple<>>;
+
+            template<template<typename...> typename Variant> 
+            using signal_types = Variant<>;
+            
             template<template<typename...> typename Tuple> 
             using error_types = Tuple<E>;
 
@@ -124,12 +126,12 @@ namespace async
                 template<typename...> typename Variant,
                 template<typename...> typename Tuple>
             using value_types = Variant<Tuple<>>;
-            template<
-                template<typename...> typename Variant,
-                template<typename...> typename Tuple>
-            using next_types = Variant<Tuple<>>;
-            template<template<typename...> typename Tuple> 
-            using error_types = Tuple<>;
+            
+            template<template<typename...> typename Variant> 
+            using signal_types = Variant<>;
+
+            template<template<typename...> typename Variant> 
+            using error_types = Variant<>;
 
             template<class Receiver>
             struct Operation
@@ -161,7 +163,7 @@ namespace async
     template<class ... Ts>
     constexpr auto justValue(Ts && ... ts) -> detail::JustValueSender<std::remove_cvref_t<Ts>...>
     {
-        return {std::forward_as_tuple(ts...)};
+        return {static_cast<Ts&&>(ts)...};
     }
 
     /**
@@ -172,11 +174,11 @@ namespace async
      * @param ts 
      * @return detail::JustNextSender<std::remove_cvref_t<Ts>...> 
      */
-    template<class ... Ts>
+    /*template<class ... Ts>
     constexpr auto justNext(Ts && ... ts) -> detail::JustNextSender<std::remove_cvref_t<Ts>...>
     {
         return {std::forward_as_tuple(ts...)};
-    }
+    }*/
 
     template<class E>
     constexpr auto justError(E && error) -> detail::JustErrorSender<std::remove_cvref_t<E>>

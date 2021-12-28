@@ -17,18 +17,6 @@ TEST_CASE("Transform")
         STATIC_REQUIRE(std::is_same_v<ValueTypes, tmp::TypeList<tmp::TypeList<int>>>);
     }
 
-    SECTION("Next type should not change for an identity transform")
-    {
-        auto transformed = async::transform(
-            async::justNext(int(5)),
-            [](int i) { return i; }
-        );
-        
-        using SenderType = decltype(transformed);
-        using NextTypes = async::SenderNextTypes<SenderType, tmp::TypeList, tmp::TypeList>;
-        STATIC_REQUIRE(std::is_same_v<NextTypes, tmp::TypeList<tmp::TypeList<int>>>);
-    }
-
     SECTION("Transform should be able to transform no arguments")
     {
         double receivedValue = 0;

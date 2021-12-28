@@ -1,5 +1,6 @@
 #pragma once
 #include "delegate.hpp"
+#include "receiver.hpp"
 #include "tmp/tag_invoke.hpp"
 #include <concepts>
 
@@ -43,6 +44,8 @@ namespace async
 
     template<class R>
     using ReceiverSchedulerType = decltype(getScheduler(std::declval<R>()));
+
+    
 
     template<class R>
     inline constexpr bool hasScheduler = tmp::is_tag_invocable_v<getScheduler_t, std::remove_cvref_t<R>&>;

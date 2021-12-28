@@ -4,12 +4,15 @@
 #include <drivers/gpio.hpp>
 #include <drivers/dma.hpp>
 #include <drivers/cs43l22.hpp>
+#include <drivers/vl6180.hpp>
 #include <drivers/i2s.hpp>
+#include <drivers/adc.hpp>
 
 #include <async/receive.hpp>
 #include <async/then.hpp>
 #include <async/repeat.hpp>
 #include <async/execute_sync.hpp>
+#include <async/on_signal.hpp>
 
 #include <schedulers/cooperative_scheduler.hpp>
 
@@ -27,6 +30,7 @@ struct Oscillator
 {
     float phase = 0;
     const float dPhase = 400.f / float(SAMPLE_FREQ);
+    float amplitude = 1.0f;
 
     float getSample()
     {
@@ -38,7 +42,7 @@ struct Oscillator
             const float t = phase / dPhase;
             val -= 2.f*t - t*t - 1.f;
         }
-        else if (t > (1.f - dt))
+        else if (phase > (1.f - dPhase))
         {
             const float t = (phase - 1.f) / dPhase + 1.f;
             val -= t*t;
@@ -46,7 +50,7 @@ struct Oscillator
 
         phase += dPhase;
         if (phase > 1.0f) phase -= 1.f;
-        return val;
+        return amplitude * val;
     }
 };
 
@@ -108,30 +112,49 @@ int main()
         i2c::dataPin<2, 9>);
     Vl6180 rangeFinder{rangeFinderI2c};
 
+    // Setup ADC1 for key input
+    auto keyInput = adc::makeAdc(
+        boardDescriptor,
+        deviceId<0>,
+        adc::analogPins(
+            PIN<0, 0>, PIN<0, 1>, PIN<0, 2>, PIN<0, 3>, PIN<0, 4>, PIN<0, 5>, PIN<0, 6>, PIN<0, 7>,
+            PIN<1, 0>, PIN<1, 1>, PIN<2, 0>, PIN<2, 1>, PIN<2, 2>));
+
+    auto keyInputDma = dma::makeStream(
+        boardDescriptor,
+        dma::streamId<1, 0>,
+        dma::Channel::CHANNEL0,
+        dma::DataSize::BITS16);
+
     // Bring CS43L22 reset pin (PD4) high to turn on the DAC
 	auto dacResetPin = gpio::makeOutputPin(boardDescriptor, PIN<3, 4>);
 	dacResetPin.write(true);
 
     // Initialize DAC and range finder
     auto status = async::executeSync(scheduler, 
-        async::sequence(
-            dac.init(),
-            rangeFinder.init()));
+        dac.init(),
+        rangeFinder.init());
 
-    if (status != async::ExecutionStatus::COMPLETED_WITH_VALUE) { for (;;) { } }
+    if (status != async::CompletionStatus::COMPLETED_WITH_VALUE) { for (;;) { } }
 
     Oscillator osc{};
 
     status = async::executeSync(scheduler, 
         dacI2S.writeContinuous(i2sDma, audioBuffers, 2*BUFFER_SIZE)
-        | async::transform([&osc](std::uint16_t * buffer) {
+        | async::onSignal([&osc](std::uint16_t * buffer) {
             for (int i = 0; i < BUFFER_SIZE; i += 1)
             {
                 std::int16_t val = (std::int16_t) (30000.f * osc.getSample());
                 *(buffer++) = val;
                 *(buffer++) = val;
             }
-        }));
+        }),
+
+        rangeFinder.readRangeContinuous()
+        | async::onSignal([&osc](std::uint8_t range) {
+            osc.amplitude = float(range) / 255.f;
+        })
+    );
 
     for (;;) {}
 }

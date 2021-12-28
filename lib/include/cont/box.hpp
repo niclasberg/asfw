@@ -18,8 +18,13 @@ namespace cont
     public:
         using value_type = T;
 
-        Box() {}
-        ~Box() {}
+        Box() { }
+        ~Box() { }
+
+        Box(const Box &) = delete;
+        Box(Box &&) = delete;
+        Box& operator=(const Box &) = delete;
+        Box& operator=(Box &&) = delete;
 
         template<class ... Args>
         [[maybe_unused]] T & construct(Args && ... args)

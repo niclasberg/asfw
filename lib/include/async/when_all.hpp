@@ -3,6 +3,7 @@
 #include "inplace_stop_token.hpp"
 #include "sender.hpp"
 #include "receiver.hpp"
+#include "tmp/type_list.hpp"
 
 namespace async
 {
@@ -152,8 +153,11 @@ namespace async
                 template<typename ...> typename Tuple>
             using value_types = Variant<Tuple<>>;
 
-            template<template<typename ...> typename Variant> 
-            using error_types = Variant<>;
+            template<template<typename ...> typename Variant>
+            using signal_types = typename tmp::unique_<tmp::concat_<SenderSignalTypes<Senders, tmp::TypeList>...>>::template apply<Variant>;
+
+            template<template<typename ...> typename Variant>
+            using error_types = typename tmp::unique_<tmp::concat_<SenderErrorTypes<Senders, tmp::TypeList>...>>::template apply<Variant>;
 
             template<class ... Senders2>
             WhenAllSender(Senders2 && ... senders)

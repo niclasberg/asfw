@@ -55,6 +55,12 @@ namespace async
                     async::setError(std::move(parentOp.getReceiver()), std::move(e));
                 }
 
+                template<class T>
+                void setSignal(T && signal)
+                {
+                    async::setSignal(op_.getReceiver(), static_cast<T&&>(signal));
+                }
+
                 void setDone() &&
                 {
                     auto & parentOp = op_;
@@ -93,6 +99,12 @@ namespace async
                     async::start(nextOp);
                 }
 
+                template<class T>
+                void setSignal(T && signal)
+                {
+                    async::setSignal(op_.getReceiver(), static_cast<T&&>(signal));
+                }
+
                 template<class E>
                 void setError(E && e) &&
                 {
@@ -123,7 +135,7 @@ namespace async
             , continuationFactory_(static_cast<F2&&>(continuationFactory))
             {
                 firstOp_.constructWith([&]() {
-                    return connect(
+                    return async::connect(
                         static_cast<S2&&>(sender), 
                         FirstReceiver{*this});
                 });
@@ -182,11 +194,22 @@ namespace async
                         SenderErrorTypes<Senders, tmp::TypeList>...>::template apply<Variant>;   
             };
 
+            template<template <typename...> class Variant>
+            struct SignalTypesImpl
+            {
+                template <typename... Senders>
+                using apply =
+                    typename tmp::unique_<
+                        SenderSignalTypes<S, tmp::TypeList>,
+                        SenderSignalTypes<Senders, tmp::TypeList>...>::template apply<Variant>;   
+            };
+
         public:
-            template<
-                template<typename ...> typename Variant, 
-                template<typename ...> typename Tuple>
+            template<template<typename ...> typename Variant, template<typename ...> typename Tuple>
             using value_types = ContinuationSenderTypes<ValueTypesImpl<Variant, Tuple>::template apply>;
+
+            template<template<typename ...> typename Variant> 
+            using signal_types = ContinuationSenderTypes<SignalTypesImpl<Variant>::template apply>;
 
             template<template<typename ...> typename Variant> 
             using error_types = ContinuationSenderTypes<ErrorTypesImpl<Variant>::template apply>;
@@ -216,7 +239,7 @@ namespace async
         };
     }
 
-    inline constexpr struct then_t
+    inline constexpr struct then_t final
     {
         template<class S, class F>
         auto operator()(S && s, F && f) const
@@ -228,7 +251,7 @@ namespace async
         template<class F>
         auto operator()(F && f) const -> BindBackResultType<then_t, std::remove_cvref_t<F>>
         {
-            return bindBack(*this, static_cast<F &&>(f));
+            return bindBack(*this, static_cast<F&&>(f));
         }
-    } then;
+    } then{};
 }

@@ -12,16 +12,14 @@ namespace async
         template <template <template <typename...> class> class>
         struct _has_error_types;
 
+        template <template <template <typename...> class> class>
+        struct _has_signal_types;
+
         template<class S>
         concept has_sender_types = requires {
             typename detail::_has_value_types<S::template value_types>;
             typename detail::_has_error_types<S::template error_types>;
-        };
-
-        template<class S>
-        concept has_many_sender_types = requires {
-            typename detail::_has_value_types<S::template next_types>;
-            typename detail::_has_error_types<S::template error_types>;
+            typename detail::_has_signal_types<S::template signal_types>;
         };
     }
 
@@ -49,12 +47,7 @@ namespace async
     template<class S>
     concept Sender = 
         std::move_constructible<S> &&
-        detail::has_sender_types<std::remove_cvref_t<S>>;  
-    
-    template<class S>
-    concept ManySender = 
-        std::move_constructible<S> &&
-        detail::has_many_sender_types<std::remove_cvref_t<S>>;
+        detail::has_sender_types<std::remove_cvref_t<S>>;
     
     template<Sender S, template <typename...> class Variant>
     using SenderErrorTypes = typename S::template error_types<Variant>;
@@ -64,15 +57,12 @@ namespace async
         template <typename...> class Tuple>
     using SenderValueTypes = typename S::template value_types<Variant, Tuple>;
 
-    template<ManySender S, 
-        template <typename...> class Variant,
-        template <typename...> class Tuple>
-    using SenderNextTypes = typename S::template next_types<Variant, Tuple>;
+    template<Sender S, template <typename...> class Variant>
+    using SenderSignalTypes = typename S::template signal_types<Variant>;
 
     inline constexpr struct connect_t final
     {
-        template<class S, class R>
-            requires Sender<S> || ManySender<S>
+        template<Sender S, class R>
         constexpr decltype(auto) operator()(S && sender, R && receiver) const
         {
             return static_cast<S&&>(sender).connect(static_cast<R&&>(receiver));

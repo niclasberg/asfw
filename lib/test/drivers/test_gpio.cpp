@@ -177,7 +177,7 @@ TEST_CASE("Gpio")
         
         auto op = async::connect(
             pin.whenChanged(),
-            async::receiveNext([&currentValue](bool value) {
+            async::receiveSignal([&currentValue](bool value) {
                 currentValue = value;
             }));
         

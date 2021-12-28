@@ -77,11 +77,11 @@ namespace async
     class EventEmitter
     {
     public:
-        EventEmitter(Event * event) : event_(event) { }
-        EventEmitter(const EventEmitter &) = default;
-        EventEmitter(EventEmitter &&) = default;
-        EventEmitter & operator=(const EventEmitter &) = default;
-        EventEmitter & operator=(EventEmitter &&) = default;
+        explicit EventEmitter(Event * event) : event_(event) { }
+        EventEmitter(const EventEmitter & rhs) { event_ = rhs.event_; }
+        EventEmitter(EventEmitter && rhs) { event_ = rhs.event_; }
+        EventEmitter & operator=(const EventEmitter & rhs) { event_ = rhs.event_; return *this; }
+        EventEmitter & operator=(EventEmitter && rhs) { event_ = rhs.event_; return *this; }
 
         template<class Derived>
         bool subscribe(EventHandlerImpl<Derived> * handler)

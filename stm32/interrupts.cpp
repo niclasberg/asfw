@@ -7,7 +7,7 @@ std::array<async::Event, 128> events = {};
 
 async::EventEmitter board::detail::getInterruptEvent(int irqNo)
 {
-    return {&events[irqNo+1]};
+    return async::EventEmitter{&events[irqNo+1]};
 }
 
 extern "C" void Default_Handler(void);

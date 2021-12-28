@@ -30,11 +30,15 @@ namespace drivers::dma
     concept DmaLike = requires(
             T & dma, 
             MemoryAddressPair memoryAddressPair, 
+            MemoryAddress memoryAddress,
             PeripheralAddress peripheralAddress, 
             std::uint16_t size)
         {
             { dma.transferDoubleBuffered(memoryAddressPair, peripheralAddress, size) }  -> DmaTransferFactory;
             { dma.transferDoubleBuffered(peripheralAddress, memoryAddressPair, size) } -> DmaTransferFactory;
+            { dma.transferSingle(memoryAddress, peripheralAddress, size) }  -> DmaTransferFactory;
+            { dma.transferSingle(peripheralAddress, memoryAddress, size) } -> DmaTransferFactory;
+            { dma.transferSingle(memoryAddress, memoryAddress, size) } -> DmaTransferFactory;
         };
 
     template<DmaTransferFactory TransferFactory, std::invocable<DmaSignal> Handler>

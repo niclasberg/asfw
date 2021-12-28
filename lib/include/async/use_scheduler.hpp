@@ -27,11 +27,10 @@ namespace async
                 async::setValue(std::move(innerReceiver_), static_cast<Values&&>(values)...);
             }
 
-            template<class ... Values>
-                requires ManyReceiverOf<R, Values...>
-            void setNext(Values && ... values)
+            template<class T>
+            void setSignal(T && signal)
             {
-                async::setNext(innerReceiver_, static_cast<Values&&>(values)...);
+                async::setSignal(innerReceiver_, static_cast<T&&>(signal));
             }
 
             template<class E>
@@ -68,6 +67,9 @@ namespace async
         public:
             template<template<typename...> class Variant, template<typename...> class Tuple>
             using value_types = SenderValueTypes<ParentSender, Variant, Tuple>;
+
+            template<template<typename...> class Variant>
+            using signal_types = SenderSignalTypes<ParentSender, Variant>;
 
             template<template<typename...> class Variant>
             using error_types = SenderErrorTypes<ParentSender, Variant>;

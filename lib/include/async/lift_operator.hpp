@@ -56,8 +56,6 @@ namespace async
             F liftedOperation_;
         };
 
-        
-
         template<class S, class F>
         class LiftSender
         {

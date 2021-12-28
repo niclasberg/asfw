@@ -6,23 +6,16 @@ namespace async
     namespace detail
     {
         template<class F>
-        struct NextReceiver
+        struct SignalReceiver
         {
             F f;
 
             template<class ... Values> void setValue(Values && ...) && { }
 
-            template<class ... Values>
-            void setNext(Values && ... values)
+            template<class T>
+            void setSignal(T && signal)
             {
-                if constexpr (sizeof...(Values) > 0)
-                {
-                    f(static_cast<Values&&>(values)...);
-                }
-                else
-                {
-                    f();
-                }
+                f(static_cast<T&&>(signal));
             }
 
             template<class E> void setError(E &&) && { }
@@ -47,7 +40,7 @@ namespace async
                 }
             }
 
-            template<class ... Values> void setNext(Values && ...) { }
+            template<class T> void setSignal(T &&) { }
             template<class E> void setError(E &&) && { }
             void setDone() && { }
         };
@@ -58,7 +51,7 @@ namespace async
             F f;
 
             template<class ... Values> void setValue(Values && ...) && { }
-            template<class ... Values> void setNext(Values && ...) { }
+            template<class T> void setSignal(T &&) { }
 
             template<class E> 
             void setError(E && e) && 
@@ -75,7 +68,7 @@ namespace async
             F f;
 
             template<class ... Values> void setValue(Values && ...) { }
-            template<class ... Values> void setNext(Values && ...) { }
+            template<class T> void setSignal(T &&) { }
             template<class E> void setError(E &&) &&  { }
 
             void setDone() && 
@@ -83,8 +76,15 @@ namespace async
                 std::move(f)();
             }
         };
+
+        struct NullReceiver
+        {
+            template<class ... Values> void setValue(Values &&...) && { }
+            template<class T> void setSignal(T &&...) { }
+            template<class E> void setError(E &&) && { }
+            void setDone() && { }
+        };
     }
-    
 
     template<class OnValue, class OnError>
     struct ValueAndErrorReceiver
@@ -117,7 +117,7 @@ namespace async
     }
 
     template<class F>
-    constexpr auto receiveNext(F && f) -> detail::NextReceiver<std::remove_cvref_t<F>>
+    constexpr auto receiveSignal(F && f) -> detail::SignalReceiver<std::remove_cvref_t<F>>
     {
         return {static_cast<F &&>(f)};
     }

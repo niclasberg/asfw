@@ -11,7 +11,11 @@ namespace drivers::uart
     class Uart
     {
     public:
-        explicit Uart(const async::EventEmitter & interruptSource) : interruptSource_(interruptSource) { }
+        explicit Uart(const async::EventEmitter & interruptSource) 
+        : interruptSource_(interruptSource) 
+        { 
+
+        }
 
         Uart(const Uart &) = delete;
         Uart(Uart &&) = delete;

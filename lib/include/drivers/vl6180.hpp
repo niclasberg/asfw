@@ -16,6 +16,7 @@
 #include "async/conditional.hpp"
 #include "async/repeat.hpp"
 #include "async/just.hpp"
+#include "async/signal.hpp"
 
 namespace drivers
 {
@@ -107,40 +108,65 @@ namespace drivers
                 });
         }
 
-        auto readRange()
+        async::Sender auto readRange()
         {
             using namespace vl6180::regmap;
             return async::sequence(
-                startMeasurement(),
+                reg::apply(device_,
+                    reg::set(SYSRANGE_CONTROL::START_STOP),
+                    reg::write(SYSRANGE_CONTROL::MODE, constant_c<SYSRANGE_CONTROL::ModeVal::SINGLE_SHOT>)),
+
                 waitForSampleReady(),
+
                 reg::uncheckedRead(device_, RANGE_VAL::_Offset{})
-                | async::then([this](auto rangeValue) {
+
+                // We want to set the value after we have cleared the interrupt 
+                // flags. So we just use a then->transform here to keep the rangeValue
+                // from going out of scope
+                | async::then([this](std::uint8_t rangeValue) {
                     return 
-                        // Clear interrupt flags
-                        reg::apply(device_,
-                            reg::set(INTERRUPT_CLEAR::RANGE_INTERRUPT),
-                            reg::set(INTERRUPT_CLEAR::ERROR_INTERRUPT))
+                        clearInterruptFlags()
                         | async::transform([rangeValue]() { return rangeValue; });
                 }));
         }
+
+        async::Sender auto readRangeContinuous()
+        {
+            using namespace vl6180::regmap;
+            return async::sequence(
+                reg::apply(device_,
+                    reg::set(SYSRANGE_CONTROL::START_STOP),
+                    reg::write(SYSRANGE_CONTROL::MODE, constant_c<SYSRANGE_CONTROL::ModeVal::CONTINUOUS>)),
+
+                async::repeat(
+                    async::sequence(
+                        waitForSampleReady(),
+                        
+                        reg::uncheckedRead(device_, RANGE_VAL::_Offset{})
+                        | async::signalOnValue([](std::uint8_t rangeValue) {
+                            return rangeValue;
+                        }),
+                        
+                        clearInterruptFlags()
+                    )
+                ));
+        }
         
     private:
-        auto startMeasurement()
-        {
-            using namespace vl6180::regmap;
-            return reg::apply(device_,
-                reg::set(SYSRANGE_CONTROL::START_STOP),
-                reg::write(SYSRANGE_CONTROL::MODE, constant_c<SYSRANGE_CONTROL::ModeVal::SINGLE_SHOT>));
-        }
-
         auto waitForSampleReady()
         {
-            using namespace vl6180::regmap;
             return async::repeatUntil(
-                reg::read(device_, INTERRUPT_STATUS::RANGE_INTERRUPT),
+                reg::read(device_, vl6180::regmap::INTERRUPT_STATUS::RANGE_INTERRUPT),
                 [](auto value) { 
                     return value == 0x4;//INTERRUPT_STATUS::RangeInterruptVal::NEW_SAMPLE_READY; 
                 });
+        }
+
+        auto clearInterruptFlags()
+        {
+            return reg::apply(device_,
+                reg::set(vl6180::regmap::INTERRUPT_CLEAR::RANGE_INTERRUPT),
+                reg::set(vl6180::regmap::INTERRUPT_CLEAR::ERROR_INTERRUPT));
         }
 
         auto setupRegisterDefaults()

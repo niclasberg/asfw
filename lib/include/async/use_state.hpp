@@ -48,6 +48,9 @@ namespace async
             using value_types = SenderValueTypes<InnerSender, Variant, Tuple>;
 
             template<template<typename...> class Variant>
+            using signal_types = SenderSignalTypes<InnerSender, Variant>;
+
+            template<template<typename...> class Variant>
             using error_types = SenderErrorTypes<InnerSender, Variant>;
 
             template<class State2, class SenderFactory2>

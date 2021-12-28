@@ -45,7 +45,7 @@ namespace drivers::gpio
             {
                 bool value = reg::read(GpioX{}, board::gpio::IDR::IDR[uint8_c<pinNo>]);
                 reg::set(Exti{}, board::exti::PR::PR[uint8_c<pinNo>]);
-                async::setNext(receiver_, value);
+                async::setSignal(receiver_, value);
             }
 
             void stop()
@@ -73,7 +73,7 @@ namespace drivers::gpio
 
         auto whenChanged()
         {
-            return async::makeSourceManySender<GpioError, bool>(
+            return async::makeSignalSourceSender<GpioError, bool>(
                 [this]<typename R>(R && receiver) 
                     -> detail::WhenChangedOperation<std::remove_cvref_t<R>, GpioX, Exti, pinNo> 
                 {

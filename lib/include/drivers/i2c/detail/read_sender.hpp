@@ -9,8 +9,10 @@ namespace drivers::i2c::detail
     class ReadSender
     {
     public:
-        template<template<typename ...> class Tuple, template<typename ...> class Variant>
-        using value_types = Tuple<Variant<>>;
+        template<template<typename ...> class Variant, template<typename ...> class Tuple>
+        using value_types = Variant<Tuple<>>;
+        template<template<typename ...> class Variant>
+        using signal_types = Variant<>;
         template<template<typename ...> class Variant>
         using error_types = Variant<I2cError>;
 

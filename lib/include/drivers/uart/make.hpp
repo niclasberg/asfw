@@ -65,8 +65,9 @@ namespace drivers::uart
 
     template<class Board, std::uint8_t id, class ... Options>
     constexpr auto makeUart(Board board, DeviceId<id> deviceId, Options && ... opts)
+        -> Uart<decltype(std::declval<Board>().getPeripheral(PeripheralTypes::UART<id>))>
     {
-        constexpr auto uartX = board.getPeripheral(PeripheralTypes::UART<id>); 
+        auto uartX = board.getPeripheral(PeripheralTypes::UART<id>); 
 
         auto options = opt::makeOptionSet(
             opt::fields(
@@ -95,8 +96,8 @@ namespace drivers::uart
         // Setup interrupts
         auto interrupt = detail::getInterrupt(deviceId);
 		board.enableIRQ(interrupt);
+        auto interruptEvent = board.getInterruptEvent(interrupt);
 
-        return Uart<decltype(uartX)>{
-            board.getInterruptEvent(interrupt)};
+        return Uart<decltype(uartX)>{interruptEvent};
     }
 }

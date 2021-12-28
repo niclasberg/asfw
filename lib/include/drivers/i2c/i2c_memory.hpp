@@ -73,6 +73,9 @@ namespace drivers::i2c
                 template<typename...> typename Variant,
                 template<typename...> typename Tuple>
             using value_types = Variant<typename F::template ValueTypes<Tuple>>;
+
+            template<template<typename...> typename Variant> 
+            using signal_types = async::SenderSignalTypes<ParentSender, Variant>;
             
             template<template<typename...> typename Variant> 
             using error_types = async::SenderErrorTypes<ParentSender, Variant>;

@@ -124,6 +124,15 @@ namespace async
                     Variant, Tuple>;
 
             template<template<typename...> class Variant>
+            using signal_types = 
+                tmp::apply_<
+                    tmp::unique_<
+                        tmp::concat_<
+                            SenderSignalTypes<STrue, tmp::TypeList>,
+                            SenderSignalTypes<SFalse, tmp::TypeList>>>,
+                    Variant>;
+
+            template<template<typename...> class Variant>
             using error_types = 
                 tmp::apply_<
                     tmp::unique_<

@@ -14,7 +14,7 @@ add_subdirectory(lib)
 set(EXECUTABLE ${PROJECT_NAME}.out)
 
 add_executable(${EXECUTABLE} 
-    projects/vl6180/main.cpp
+    projects/adc_read/main.cpp
     stm32/syscalls.c
     stm32/interrupts.cpp
     stm32/startup_stm32f407vgtx.s)

@@ -5,6 +5,7 @@
 #include "reg/peripheral_operations.hpp"
 #include "board/regmap/uart.hpp"
 #include <cstdint>
+#include "async/scheduler.hpp"
 
 #include "reg/set.hpp"
 #include "reg/clear.hpp"
@@ -68,8 +69,7 @@ namespace drivers::uart
                     // Wait for transfer complete
                     if (reg::bitIsSet(UartX{}, board::uart::SR::TC))
                     {
-                        stop();
-                        async::setValue(std::move(receiver_));
+                        completeOperation();
                         return;
                     }
                 }
@@ -86,6 +86,22 @@ namespace drivers::uart
             }
 
         private:
+            void completeOperation()
+            {
+                reg::apply(UartX{}, 
+                    reg::clear(board::uart::CR1::TXEIE),
+                    reg::clear(board::uart::CR1::TCIE));
+
+                auto & s = async::getScheduler(receiver_);
+                s.postFromISR({memFn<&WriteOperation::setValueImpl>, *this});
+            }
+
+            void setValueImpl()
+            {
+                interruptEvent_.unsubscribe();
+                async::setValue(std::move(receiver_));
+            }
+
             R receiver_;
             async::EventEmitter interruptEvent_;
             const std::uint8_t * current_;

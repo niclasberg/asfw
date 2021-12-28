@@ -15,6 +15,9 @@ namespace async
             using value_types = Variant<Tuple<Args...>>;
 
             template<template<typename ...> typename Variant> 
+            using signal_types = Variant<>;
+
+            template<template<typename ...> typename Variant> 
             using error_types = Variant<E>;
 
             template<class F2>
@@ -39,19 +42,20 @@ namespace async
         };
 
         template<class F, class E, class ... Args>
-        class SourceManySender
+        class SignalSourceSender
         {
         public:
-            template<
-                template<typename ...> typename Tuple, 
-                template<typename ...> typename Variant>
-            using next_types = Tuple<Variant<Args...>>;
+            template<template<typename ...> typename Variant, template<typename ...> typename Tuple>
+            using value_types = Variant<Tuple<>>;
+
+            template<template<typename ...> typename Variant>
+            using signal_types = Variant<Args...>;
 
             template<template<typename ...> typename Tuple> 
             using error_types = Tuple<E>;
 
             template<class F2>
-            SourceManySender(F2 && factory) : factory_(static_cast<F2&&>(factory)) { }
+            SignalSourceSender(F2 && factory) : factory_(static_cast<F2&&>(factory)) { }
 
             template<class R>
             auto connect(R && receiver) &&
@@ -78,12 +82,12 @@ namespace async
     template<class E, class ... ValueTypes>
     inline constexpr makeSourceSender_t<E, ValueTypes...> makeSourceSender{};
 
-    template<class E, class ... ValueTypes>
-    struct makeSourceManySender_t 
+    template<class E, class ... SignalTypes>
+    struct makeSignalSourceSender_t 
     {
         template<class F>
         auto operator()(F && factory) const
-            -> detail::SourceManySender<std::remove_cvref_t<F>, E, ValueTypes...>
+            -> detail::SignalSourceSender<std::remove_cvref_t<F>, E, SignalTypes...>
         {
             return {static_cast<F&&>(factory)};
         }
@@ -94,5 +98,5 @@ namespace async
      * and \p ValueTypes as value_type.
      */
     template<class E, class ... ValueTypes>
-    inline constexpr makeSourceManySender_t<E, ValueTypes...> makeSourceManySender{};
+    inline constexpr makeSignalSourceSender_t<E, ValueTypes...> makeSignalSourceSender{};
 }

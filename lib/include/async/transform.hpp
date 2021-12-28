@@ -24,7 +24,6 @@ namespace async
             }
 
             template<class ... Values>
-                requires ReceiverOf<R, Values...>
             void setValue(Values && ... values) &&
             {
                 using Result = std::invoke_result_t<F, Values...>;
@@ -39,20 +38,10 @@ namespace async
                 }
             }
 
-            template<class ... Values>
-                requires ManyReceiverOf<R, Values...>
-            void setNext(Values && ... values)
+            template<class T>
+            void setSignal(T && signal)
             {
-                using Result = std::invoke_result_t<F, Values...>;
-                if constexpr (std::is_void_v<Result>)
-                {
-                    f_(static_cast<Values &&>(values)...);
-                    async::setNext(receiver_);
-                }
-                else
-                {   
-                    async::setNext(receiver_, f_(static_cast<Values &&>(values)...));
-                }
+                async::setSignal(receiver_, static_cast<T&&>(signal));
             }
 
             template<class E>
@@ -81,54 +70,23 @@ namespace async
         template<class T>
         using VoidFix = tmp::ConditionalType<std::is_void_v<T>, tmp::TypeList<>, tmp::TypeList<T>>;
 
-        template<class ParentSender, class F, bool isManySender>
-        struct ManySenderValueTraits
-        {
-            
-        };
-
         template<class ParentSender, class F>
-        struct ManySenderValueTraits<ParentSender, F, true>
+        class TransformSender
         {
             template <typename... Args>
             using Result = tmp::TypeList<VoidFix<std::invoke_result_t<F, Args...>>>;
 
-            template<
-                template<typename...> typename Variant,
-                template<typename...> typename Tuple>
-            using next_types = tmp::nestedApply_<
-                    SenderNextTypes<ParentSender, tmp::unique_, Result>,
-                    Variant, Tuple>;
-        };
-
-        template<class ParentSender, class F, bool isSender>
-        struct SenderValueTraits
-        {
-            
-        };
-
-        template<class ParentSender, class F>
-        struct SenderValueTraits<ParentSender, F, true>
-        {
-            template <typename... Args>
-            using Result = tmp::TypeList<VoidFix<std::invoke_result_t<F, Args...>>>;
-
-            template<
-                template<typename...> typename Variant,
-                template<typename...> typename Tuple>
+        public:
+            template<template<typename...> typename Variant, template<typename...> typename Tuple>
             using value_types = tmp::nestedApply_<
                     SenderValueTypes<ParentSender, tmp::unique_, Result>,
                     Variant, Tuple>;
-        };
 
-        template<class ParentSender, class F>
-        class TransformSender : 
-            public SenderValueTraits<ParentSender, F, Sender<ParentSender>>,
-            public ManySenderValueTraits<ParentSender, F, ManySender<ParentSender>>
-        {
-        public:
             template<template<typename...> typename Variant>
-            using error_types = typename ParentSender::template error_types<Variant>;
+            using error_types = SenderErrorTypes<ParentSender, Variant>;
+
+            template<template<typename...> typename Variant>
+            using signal_types = SenderSignalTypes<ParentSender, Variant>;
 
             template<class F2>
             TransformSender(ParentSender && parentSender, F2 && f)
@@ -162,8 +120,7 @@ namespace async
 
     inline constexpr struct transform_t 
     {
-        template<class S, class F>
-            requires Sender<S> || ManySender<S>
+        template<Sender S, class F>
         auto operator()(S && parent, F && f) const
             -> detail::TransformSender<std::remove_cvref_t<S>, std::remove_cvref_t<F>>
         {
