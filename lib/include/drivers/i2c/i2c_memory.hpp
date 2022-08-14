@@ -34,9 +34,10 @@ namespace drivers::i2c
         {
             void setValue() &&
             {
+                TValue value = valueRef_;
                 f_(
                     [this](auto, auto... values) { async::setValue(static_cast<R&&>(innerReceiver_), values...); },
-                    valueRef_);
+                    value);
             }
 
             template<class E>
@@ -59,7 +60,7 @@ namespace drivers::i2c
             }
 
             R innerReceiver_;
-            TValue & valueRef_;
+            volatile TValue & valueRef_;
             F f_;
         };
 

@@ -52,7 +52,7 @@ int main()
         async::repeat(
             keyInput.read(keyInputDma, data)
             | async::then([&]() {
-                std::sprintf(msgBuffer, "value: %02x, %02x, %02x, %02x, %02x, %02x, %02x, %02x, %02x, %02x, %02x, %02x, %02x\r\n",
+                std::sprintf(msgBuffer, "value: %02x, %02x, %02x, %02x, %02x, %02x, %02x, %02x, %02x, %02x, %02x, %02x\r\n",
                         data[0], data[1], data[2], data[3], data[4], data[5], data[6], 
                         data[7], data[8], data[9], data[10], data[11]);
                 return serial.write((const uint8_t *)msgBuffer, std::strlen(msgBuffer));

@@ -11,10 +11,16 @@
 #include <async/receive.hpp>
 #include <async/then.hpp>
 #include <async/repeat.hpp>
+#include <async/delay.hpp>
 #include <async/execute_sync.hpp>
 #include <async/on_signal.hpp>
 
 #include <schedulers/cooperative_scheduler.hpp>
+
+#include "Oscillator.h"
+#include "Filter.h"
+#include "Envelope.h"
+#include "InputController.h"
 
 #include <cstring>
 #include <cmath>
@@ -25,34 +31,6 @@ using namespace schedulers;
 constexpr std::uint32_t SAMPLE_FREQ = 48'000;
 constexpr std::uint32_t BUFFER_SIZE = 128;
 namespace clock = board::clock;
-
-struct Oscillator
-{
-    float phase = 0;
-    const float dPhase = 400.f / float(SAMPLE_FREQ);
-    float amplitude = 1.0f;
-
-    float getSample()
-    {
-        float val = 2.f * phase - 1.f;
-
-        // Polyblep band limiting
-        if (phase < dPhase)
-        {
-            const float t = phase / dPhase;
-            val -= 2.f*t - t*t - 1.f;
-        }
-        else if (phase > (1.f - dPhase))
-        {
-            const float t = (phase - 1.f) / dPhase + 1.f;
-            val -= t*t;
-        }
-
-        phase += dPhase;
-        if (phase > 1.0f) phase -= 1.f;
-        return amplitude * val;
-    }
-};
 
 int main()
 {
@@ -117,8 +95,14 @@ int main()
         boardDescriptor,
         deviceId<0>,
         adc::analogPins(
-            PIN<0, 0>, PIN<0, 1>, PIN<0, 2>, PIN<0, 3>, PIN<0, 4>, PIN<0, 5>, PIN<0, 6>, PIN<0, 7>,
-            PIN<1, 0>, PIN<1, 1>, PIN<2, 0>, PIN<2, 1>, PIN<2, 2>));
+            PIN<2, 1>,
+            PIN<2, 2>, PIN<2, 3>,
+            PIN<0, 0>, PIN<0, 1>, 
+            PIN<0, 2>, PIN<0, 3>, 
+            PIN<0, 5>, 
+            PIN<0, 7>,
+            PIN<2, 4>, PIN<2, 5>,
+            PIN<1, 1>));
 
     auto keyInputDma = dma::makeStream(
         boardDescriptor,
@@ -137,23 +121,30 @@ int main()
 
     if (status != async::CompletionStatus::COMPLETED_WITH_VALUE) { for (;;) { } }
 
-    Oscillator osc{};
+    Oscillator oscillator(SAMPLE_FREQ);
+    Filter filter{SAMPLE_FREQ};
+    Envelope envelope{SAMPLE_FREQ};
+    InputController inputController{keyInput, keyInputDma, envelope, oscillator};
 
     status = async::executeSync(scheduler, 
         dacI2S.writeContinuous(i2sDma, audioBuffers, 2*BUFFER_SIZE)
-        | async::onSignal([&osc](std::uint16_t * buffer) {
+        | async::onSignal([&](std::uint16_t * buffer) {
             for (int i = 0; i < BUFFER_SIZE; i += 1)
             {
-                std::int16_t val = (std::int16_t) (30000.f * osc.getSample());
+                std::int16_t val = (std::int16_t) (30000.f * 
+                    filter(oscillator()) * envelope());
                 *(buffer++) = val;
                 *(buffer++) = val;
             }
         }),
 
         rangeFinder.readRangeContinuous()
-        | async::onSignal([&osc](std::uint8_t range) {
-            osc.amplitude = float(range) / 255.f;
-        })
+        | async::onSignal([&filter](std::uint8_t range) {
+            filter.setCutoff(800.f * float(range) / 255.f + 10.f);
+        }),
+
+        async::repeat(
+            async::delay(inputController.update(), 5))
     );
 
     for (;;) {}

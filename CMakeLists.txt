@@ -14,7 +14,10 @@ add_subdirectory(lib)
 set(EXECUTABLE ${PROJECT_NAME}.out)
 
 add_executable(${EXECUTABLE} 
-    projects/adc_read/main.cpp
+    projects/cs43l22/main.cpp
+    projects/cs43l22/Envelope.cpp
+    projects/cs43l22/Filter.cpp
+    projects/cs43l22/Oscillator.cpp
     stm32/syscalls.c
     stm32/interrupts.cpp
     stm32/startup_stm32f407vgtx.s)

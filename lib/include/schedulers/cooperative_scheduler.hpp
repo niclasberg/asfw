@@ -53,7 +53,7 @@ namespace schedulers
         void poll()
         {
             // Run timed tasks first
-            /*auto currentTick = currentTick_;
+            auto currentTick = currentTick_;
             for (auto & task : futureTasks_)
             {
                 if (task.func && currentTick >= task.executeAtTick)
@@ -68,7 +68,7 @@ namespace schedulers
                         task.func.reset();
                     }
                 }
-            }*/
+            }
 
             // Run enqueued tasks
             if (headIndex_ != tailIndex_)

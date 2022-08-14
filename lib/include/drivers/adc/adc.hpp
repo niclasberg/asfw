@@ -12,7 +12,7 @@
 
 namespace drivers::adc
 {
-    template<class AdcX, std::uint8_t NChannels, std::uint16_t maxValue>
+    template<class AdcX, std::uint8_t NChannels, std::uint16_t _maxValue>
     class Adc
     {
         template<class TransferFactory, class R>
@@ -38,10 +38,9 @@ namespace drivers::adc
             using DmaTransfer = dma::DmaTransferType<TransferFactory, DmaEventHandler>;
         public:
             template<class TransferFactory2, class R2>
-            ReadDmaOperation(TransferFactory2 && transferFactory, R2 && receiver, std::uint16_t * buffer)
+            ReadDmaOperation(TransferFactory2 && transferFactory, R2 && receiver)
             : transfer_(static_cast<TransferFactory2&&>(transferFactory)(DmaEventHandler{*this}))
             , receiver_(static_cast<R2&&>(receiver))
-            , buffer_(buffer)
             {
 
             }
@@ -83,7 +82,6 @@ namespace drivers::adc
 
             DmaTransfer transfer_;
             R receiver_;
-            std::uint16_t * buffer_;
         };
 
         template<dma::DmaTransferFactory TransferFactory>
@@ -102,17 +100,16 @@ namespace drivers::adc
             template<class R>
             auto connect(R && receiver) && -> ReadDmaOperation<TransferFactory, std::remove_cvref_t<R>>
             {
-                return {std::move(transferFactory_), static_cast<R&&>(receiver), buffer_};
+                return {std::move(transferFactory_), static_cast<R&&>(receiver)};
             }
 
             template<class R>
             auto connect(R && receiver) const & -> ReadDmaOperation<TransferFactory, std::remove_cvref_t<R>>
             {
-                return {transferFactory_, static_cast<R&&>(receiver), buffer_};
+                return {transferFactory_, static_cast<R&&>(receiver)};
             }
 
             TransferFactory transferFactory_;
-            std::uint16_t * buffer_;
         };
 
     public:
@@ -122,10 +119,8 @@ namespace drivers::adc
             
         }
 
-        constexpr std::uint16_t getMaxVal() const 
-        { 
-            return maxValue;
-        }
+        inline static constexpr std::uint8_t numberOfChannels = NChannels;
+        inline static constexpr std::uint16_t maxValue = _maxValue;
 
         template<dma::DmaLike Dma>
         async::Sender auto read(Dma & dmaDevice, std::uint16_t * buffer)
@@ -138,7 +133,7 @@ namespace drivers::adc
                 NChannels);
             
             return ReadDmaSender<std::remove_cvref_t<decltype(transferFactory)>>{
-                std::move(transferFactory), buffer};
+                std::move(transferFactory)};
         }
     private:
         async::EventEmitter eventEmitter_;

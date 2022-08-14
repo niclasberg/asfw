@@ -17,7 +17,7 @@ namespace async
             DelayOperation(S2 && sender, R2 && receiver, Sched & scheduler, int waitPeriodInMiliseconds)
             : scheduler_(scheduler)
             , innerOperation_(
-                connect(static_cast<S2&&>(sender), static_Cast<R2&&>(receiver)))
+                connect(static_cast<S2&&>(sender), static_cast<R2&&>(receiver)))
             , waitPeriodInMiliseconds_(waitPeriodInMiliseconds)
             {
 
@@ -27,7 +27,7 @@ namespace async
             {
                 scheduler_.postAfter(
                     waitPeriodInMiliseconds_, 
-                    {memFn<&DelayOperation::startOperation>, this});
+                    {memFn<&DelayOperation::startOperation>, *this});
             }
 
         private:
@@ -39,13 +39,22 @@ namespace async
 
             Sched & scheduler_;
             InnerOperation innerOperation_;
-            int waitPeriodInMiliseconds_ = 1;
+            int waitPeriodInMiliseconds_;
         };
 
-        template<Sender S>
+        template<class S>
         class DelaySender
         {
         public:
+            template<template<typename...> class Variant, template<typename...> class Tuple>
+            using value_types = SenderValueTypes<S, Variant, Tuple>;
+
+            template<template<typename...> class Variant>
+            using signal_types = SenderSignalTypes<S, Variant>;
+
+            template<template<typename...> class Variant>
+            using error_types = SenderErrorTypes<S, Variant>;
+
             template<class S2>
             DelaySender(int waitPeriodInMiliseconds, S2 && sender)
             : waitPeriodInMiliseconds_(waitPeriodInMiliseconds)
@@ -58,25 +67,28 @@ namespace async
             constexpr auto connect(R && receiver) &&
                 -> DelayOperation<S, std::remove_cvref_t<R>, ReceiverSchedulerType<R>>
             {
-                return { 
-                    std::move(sender), 
-                    static_cast<R&&>(receiver), 
-                    getScheduler(receiver), 
-                    waitPeriodInMiliseconds_ };
+                return { std::move(sender_), static_cast<R&&>(receiver), getScheduler(receiver), waitPeriodInMiliseconds_ };
+            }
+
+            template<class R>
+            constexpr auto connect(R && receiver) const &
+                -> DelayOperation<S, std::remove_cvref_t<R>, ReceiverSchedulerType<R>>
+            {
+                return { sender_, static_cast<R&&>(receiver), getScheduler(receiver), waitPeriodInMiliseconds_ };
             }
 
         private:
-            int waitPeriodInMiliseconds_ = 1;
+            int waitPeriodInMiliseconds_;
             S sender_;
         };
     }
 
     inline constexpr struct delay_t final
     {
-        template<VoidSender S>
-        auto operator()(S && sender) const -> detail::DelaySender<std::remove_cvref_t<S>>
+        template<Sender S>
+        auto operator()(S && sender, int waitPeriod) const -> detail::DelaySender<std::remove_cvref_t<S>>
         {
-            return 
+            return {waitPeriod, static_cast<S&&>(sender)};
         }
     } delay{};
 }
