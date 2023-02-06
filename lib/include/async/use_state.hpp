@@ -1,7 +1,7 @@
 #pragma once
 #include <concepts>
 #include <type_traits>
-#include "sender.hpp"
+#include "future.hpp"
 #include "tmp/traits.hpp"
 
 namespace async
@@ -12,7 +12,7 @@ namespace async
         class UseStateOperation
         {
             using InnerSender = tmp::CallableResultType<SenderFactory, State&>;
-            using InnerOperation = ConnectResultType<InnerSender, R>;
+            using InnerOperation = connect_result_t<InnerSender, R>;
 
         public:
             template<class State2, class SenderFactory2, class R2>
@@ -42,16 +42,11 @@ namespace async
         template<class State, std::invocable<State&> SenderFactory>
         class UseStateSender
         {
+            using Self = UseStateSender<State, SenderFactory>;
             using InnerSender = tmp::CallableResultType<SenderFactory, State&>;
         public:
-            template<template<typename...> class Variant, template<typename...> class Tuple>
-            using value_types = SenderValueTypes<InnerSender, Variant, Tuple>;
-
-            template<template<typename...> class Variant>
-            using signal_types = SenderSignalTypes<InnerSender, Variant>;
-
-            template<template<typename...> class Variant>
-            using error_types = SenderErrorTypes<InnerSender, Variant>;
+            using value_type = future_value_t<InnerSender>;
+            using error_type = future_error_t<InnerSender>;
 
             template<class State2, class SenderFactory2>
             UseStateSender(State2 && state, SenderFactory2 && senderFactory)
@@ -61,21 +56,19 @@ namespace async
 
             }
 
-            template<class R>
-            auto connect(R && receiver) &&
-                -> UseStateOperation<State, SenderFactory, std::remove_cvref_t<R>>
-            {
-                return {std::move(state_), std::move(senderFactory_), static_cast<R&&>(receiver)};
-            }
-
-            template<class R>
-            auto connect(R && receiver) const &
-                -> UseStateOperation<State, SenderFactory, std::remove_cvref_t<R>>
-            {
-                return {state_, senderFactory_, static_cast<R&&>(receiver)};
-            }
-
         private:
+            template<class S, AnyReceiver R>
+                requires std::same_as<std::decay_t<S>, Self>
+            friend auto tag_invoke(connect_t, S && sender, R && receiver)
+                -> UseStateOperation<State, SenderFactory, std::remove_cvref_t<R>>
+            {
+                return {
+                    static_cast<S&&>(sender).state_, 
+                    static_cast<S&&>(sender).senderFactory_, 
+                    static_cast<R&&>(receiver)
+                };
+            }
+
             State state_;
             SenderFactory senderFactory_;
         };

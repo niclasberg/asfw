@@ -51,14 +51,13 @@ template<auto value>
 constexpr constant_<value> constant_c{};
 
 // Gpio pin identifier
-template<std::uint8_t portNo, std::uint8_t pinNo>
 struct Pin
 {
+    constexpr Pin(std::uint8_t _port, std::uint8_t _pin) : port(_port), pin(_pin) {}
 
+    std::uint8_t port;
+    std::uint8_t pin;
 };
-
-template<std::uint8_t portNo, std::uint8_t pinNo>
-constexpr Pin<portNo, pinNo> PIN {};
 
 // General device id
 template<std::uint8_t> struct DeviceId {};

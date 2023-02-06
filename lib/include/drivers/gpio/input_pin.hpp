@@ -1,6 +1,7 @@
 #pragma once
 #include "types.hpp"
 #include "reg/read.hpp"
+#include "board/regmap/gpio.hpp"
 
 namespace drivers::gpio
 {

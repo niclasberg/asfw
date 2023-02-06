@@ -15,7 +15,7 @@ namespace {
 TEST_CASE("Cooperative scheduler")
 {
     using namespace schedulers;
-    auto mockBoard = makeMockBoard(mockPeripherals<Peripherals>);
+    auto mockBoard = MockBoard<Peripherals>();
 
     SECTION("Should fullfill the scheduler concept")
     {

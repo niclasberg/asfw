@@ -56,4 +56,27 @@ namespace cont
     private:
         std::aligned_union_t<0, Ts...> storage_;
     };
+
+    template<>
+    struct BoxUnion<>
+    {
+        BoxUnion() {}
+        ~BoxUnion() {}
+
+        BoxUnion(const BoxUnion &) = delete;
+        BoxUnion(BoxUnion &&) = delete;
+        BoxUnion& operator=(const BoxUnion &) = delete;
+        BoxUnion& operator=(BoxUnion &&) = delete;
+
+        template<class ... Args>
+        void construct(union_<void>, Args && ... args)
+        {
+
+        }
+
+        template<std::invocable F>
+        void constructWith(F && f) { }
+
+        void destruct(union_<void>) { }
+    };
 }

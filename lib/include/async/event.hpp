@@ -77,7 +77,7 @@ namespace async
     class EventEmitter
     {
     public:
-        explicit EventEmitter(Event * event) : event_(event) { }
+        EventEmitter(Event * event) : event_(event) { }
         EventEmitter(const EventEmitter & rhs) { event_ = rhs.event_; }
         EventEmitter(EventEmitter && rhs) { event_ = rhs.event_; }
         EventEmitter & operator=(const EventEmitter & rhs) { event_ = rhs.event_; return *this; }

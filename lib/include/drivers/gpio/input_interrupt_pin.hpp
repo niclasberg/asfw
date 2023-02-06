@@ -3,7 +3,7 @@
 #include "board/regmap/exti.hpp"
 #include "board/regmap/gpio.hpp"
 #include "async/event.hpp"
-#include "async/make_source_sender.hpp"
+#include "async/make_stream.hpp"
 #include "async/receiver.hpp"
 #include <type_traits>
 
@@ -21,6 +21,13 @@ namespace drivers::gpio
         template<class R, class GpioX, class Exti, std::uint8_t pinNo>
         class WhenChangedOperation : public async::EventHandlerImpl<WhenChangedOperation<R, GpioX, Exti, pinNo>>
         {
+            enum State
+            {
+                WAITING_FOR_VALUE,
+                RECEIVED_TRUE,
+                RECEIVED_FALSE
+            };
+            
         public:
             template<class R2>
             WhenChangedOperation(R2 && receiver, const async::EventEmitter & interruptEvent) 
@@ -41,20 +48,53 @@ namespace drivers::gpio
                 reg::set(Exti{}, board::exti::IMR::MR[uint8_c<pinNo>]);
             }
 
+            void next()
+            {
+                if (state_ == State::RECEIVED_TRUE)
+                {
+                    state_ = State::WAITING_FOR_VALUE;
+                    async::setNext(receiver_, true);
+                }
+                else if (state_ == State::RECEIVED_FALSE)
+                {
+                    state_ = State::WAITING_FOR_VALUE;
+                    async::setNext(receiver_, false);
+                }
+                else
+                {
+                    state_ = State::WAITING_FOR_VALUE;
+                }
+            }
+
             void handleEvent()
             {
                 bool value = reg::read(GpioX{}, board::gpio::IDR::IDR[uint8_c<pinNo>]);
                 reg::set(Exti{}, board::exti::PR::PR[uint8_c<pinNo>]);
-                async::setSignal(receiver_, value);
+                
+                /*if (state_ == State::WAITING_FOR_VALUE)
+                {
+                    auto & s = async::getScheduler(receiver_);
+                    if (value)
+                        s.postFromISR({memFn<&WhenChangedOperation::emitHigh>, *this});
+                    else
+                        s.postFromISR({memFn<&WhenChangedOperation::emitLow>, *this});
+                }*/
             }
 
             void stop()
             {
-
+                reg::clear(Exti{}, board::exti::IMR::MR[uint8_c<pinNo>]);
+                interruptEvent_.unsubscribe();
+                async::setDone(std::move(receiver_));
             }
+
+            void emitHigh() { async::setNext(receiver_, true); }
+            void emitLow() { async::setNext(receiver_, false); }
+
         private:
-            R receiver_;
+            [[no_unique_address]] R receiver_;
             async::EventEmitter interruptEvent_;
+            volatile State state_;
         };
     }
 
@@ -71,13 +111,13 @@ namespace drivers::gpio
 			return reg::read(GpioX{}, board::gpio::IDR::IDR[uint8_c<pinNo>]);
 		}
 
-        auto whenChanged()
+        async::Stream<bool, GpioError> auto whenChanged()
         {
-            return async::makeSignalSourceSender<GpioError, bool>(
+            return async::makeStream<bool, GpioError>(
                 [this]<typename R>(R && receiver) 
                     -> detail::WhenChangedOperation<std::remove_cvref_t<R>, GpioX, Exti, pinNo> 
                 {
-                    return {receiver, interruptEvent_};
+                    return {static_cast<R&&>(receiver), interruptEvent_};
                 });
         }
 

@@ -7,6 +7,7 @@
 
 #include "reg/unchecked_read.hpp"
 #include "reg/set.hpp"
+#include "reg/clear.hpp"
 #include "reg/bit_is_set.hpp"
 
 namespace drivers::spi
@@ -36,7 +37,7 @@ namespace drivers::spi
             {
                 if(size_ == 0)
                 {
-                    async::setValue(std::move(receiver_), data_, size_);
+                    async::setValue(std::move(receiver_));
                     return;
                 }
 
@@ -59,8 +60,9 @@ namespace drivers::spi
                     }
                     else
                     {
+                        // TODO Call this from the scheduler
                         stop();
-                        async::setValue(std::move(receiver_), data_, size_);
+                        async::setValue(std::move(receiver_));
                     }
                 }
             }

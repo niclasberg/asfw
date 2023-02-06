@@ -30,12 +30,6 @@ namespace async
                     }
                 }
 
-                template<class T>
-                void setSignal(T && signal) 
-                {
-                    async::setSignal(op_.getReceiver(), static_cast<T&&>(signal));
-                }
-
                 template<class E>
                 void setError(E && e) && 
                 {
@@ -62,14 +56,14 @@ namespace async
                 RepeatOperation & op_;
             };
 
-            using InnerOperation = ConnectResultType<S, RepeatReceiver>;
+            using InnerOperation = connect_result_t<S, RepeatReceiver>;
 
         public:
             template<class S2, class R2, class P2>
             RepeatOperation(S2 && sender, R2 && receiver, P2 && predicate)
-            : sender_(static_cast<S2&&>(sender))
-            , receiver_(static_cast<R2&&>(receiver))
-            , predicate_(static_cast<P2&&>(predicate))
+                : sender_(static_cast<S2&&>(sender))
+                , receiver_(static_cast<R2&&>(receiver))
+                , predicate_(static_cast<P2&&>(predicate))
             {
                 innerOperationStorage_.constructWith([this]() {
                     return async::connect(sender_, RepeatReceiver{*this});
@@ -103,9 +97,9 @@ namespace async
                 async::start(op);
             }
 
-            S sender_;
-            R receiver_;
-            P predicate_;
+            [[no_unique_address]] S sender_;
+            [[no_unique_address]] R receiver_;
+            [[no_unique_address]] P predicate_;
 
             cont::Box<InnerOperation> innerOperationStorage_;
         };
@@ -114,19 +108,13 @@ namespace async
         class RepeatSender
         {
         public:
-            template<template<typename...> class Variant, template<typename...> class Tuple>
-            using value_types = Variant<Tuple<>>;
-
-            template<template<typename...> class Variant>
-            using signal_types = SenderSignalTypes<S, Variant>;
-
-            template<template<typename...> class Variant>
-            using error_types = SenderErrorTypes<S, Variant>;
+            using value_type = void;
+            using error_type = future_error_t<S>;
 
             template<class S2, class P2>
             RepeatSender(S2 && sender, P2 && predicate) 
-            : sender_(static_cast<S2&&>(sender)) 
-            , predicate_(static_cast<P2&&>(predicate))
+                : sender_(static_cast<S2&&>(sender)) 
+                , predicate_(static_cast<P2&&>(predicate))
             {
 
             }

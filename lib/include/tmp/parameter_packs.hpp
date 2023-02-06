@@ -7,7 +7,7 @@ namespace tmp
      * Extract the last type in a parameter pack
      */
     template<typename... Ts>
-    using LastType = typename decltype((Identity<Ts>{}, ...))::type;
+    using LastType = typename decltype((identity_<Ts>{}, ...))::type;
 
     /**
      * Extract the first type in a parameter pack

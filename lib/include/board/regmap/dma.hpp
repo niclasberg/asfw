@@ -189,14 +189,14 @@ namespace board
 				WORD = 0x02
 			};
 
-			constexpr auto PSIZE = reg::RWMultiField<_Offset, reg::BitMask32<11, 2>, reg::RepMask<1, 1>, reg::RepLocation<8, 0x18>>{ };
-
 			enum class PsizeVal : std::uint32_t
 			{
 				BYTE = 0x00,
 				HALF_WORD = 0x01,
 				WORD = 0x02
 			};
+
+			constexpr auto PSIZE = reg::RWMultiField<_Offset, reg::BitMask32<11, 2>, reg::RepMask<1, 1>, reg::RepLocation<8, 0x18>, PsizeVal>{ };
 
 			constexpr auto MINC = reg::RWMultiField<_Offset, reg::BitMask32<10, 1>, reg::RepMask<1, 1>, reg::RepLocation<8, 0x18>>{ };
 			constexpr auto PINC = reg::RWMultiField<_Offset, reg::BitMask32<9, 1>, reg::RepMask<1, 1>, reg::RepLocation<8, 0x18>>{ };

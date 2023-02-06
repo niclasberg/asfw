@@ -1,22 +1,162 @@
 #pragma once
-#include "config.hpp"
 #include "input_pin.hpp"
 #include "output_pin.hpp"
 #include "input_interrupt_pin.hpp"
 #include "peripheral_types.hpp"
-#include <boost/hana/string.hpp>
-#include "opt/option.hpp"
+
+#include "board/regmap/gpio.hpp"
+#include "board/regmap/exti.hpp"
+#include "board/regmap/syscfg.hpp"
+#include "board/interrupts.hpp"
 
 namespace drivers::gpio
 {
+	// Alternate function
+	using AltFn = board::gpio::AFR::AfrVal;
+
+	// Pull up resistor configuration
+	using PuPd = board::gpio::PUPDR::PupdrVal;
+
+	// GPIO speed
+	using Speed = board::gpio::OSPEEDR::OspeedrVal;
+
+	// Output type
+	using OutType = board::gpio::OTYPER::OtyperVal;
+	
+	// Interrupt configuration
+	enum class Interrupt
+	{
+		RISING_EDGE,
+		FALLING_EDGE,
+		RISING_FALLING_EDGE
+	};
+
+	struct InputPinConfig
+	{
+		Pin pin;
+		PuPd pullUpDown = PuPd::NO_PULL;
+	};
+
+	struct OutputPinConfig
+	{
+		Pin pin;
+		OutType outType = OutType::PUSH_PULL;
+		PuPd pullUpDown = PuPd::NO_PULL;
+		Speed speed = Speed::LOW;
+	};
+
+	struct AnalogPinConfig
+	{
+		Pin pin;
+	};
+
+	struct AltFnPinConfig
+	{
+		Pin pin;
+		AltFn altFn;
+		OutType outType = OutType::PUSH_PULL;
+		PuPd pullUpDown = PuPd::NO_PULL;
+		Speed speed = Speed::LOW;
+	};
+
+	struct InputInterruptPinConfig
+	{
+		Pin pin;
+		Interrupt interrupt;
+		PuPd pullUpDown = PuPd::NO_PULL;
+	};
+
+	using board::gpio::MODER::ModerVal;
+
+    /**
+     * @brief Create an output gpio pin
+     **/
+	template<OutputPinConfig config>
+	struct makeOutputPin_t
+	{
+		template<class Board>
+		constexpr auto operator()(Board board) const
+		{
+			using board::gpio::MODER::ModerVal;
+			constexpr auto pinIndex = uint8_c<config.pin.pin>;
+			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>); 
+
+			gpioX.enable();
+            reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::OUTPUT>);
+			reg::write(gpioX, board::gpio::OSPEEDR::OSPEEDR[pinIndex], constant_c<config.speed>);
+			reg::write(gpioX, board::gpio::PUPDR::PUPDR[pinIndex], constant_c<config.pullUpDown>);
+			reg::write(gpioX, board::gpio::OTYPER::OT[pinIndex], constant_c<config.outType>);
+
+			return OutputPin<decltype(gpioX), config.pin.port, config.pin.pin>{};
+		}
+	};
+
+	template<OutputPinConfig config>
+	inline constexpr makeOutputPin_t<config> makeOutputPin{};
+
+	template<InputPinConfig config>
+	struct makeInputPin_t
+	{
+		template<class Board>
+		constexpr auto operator()(Board board) const
+		{
+			using board::gpio::MODER::ModerVal;
+			constexpr auto pinIndex = uint8_c<config.pin.pin>;
+			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>); 
+
+			gpioX.enable();
+            reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::INPUT>);
+			reg::write(gpioX, board::gpio::PUPDR::PUPDR[pinIndex], constant_c<config.pullUpDown>);
+
+			return InputPin<decltype(gpioX), config.pin.port, config.pin.pin>{};
+		}
+	};
+
+	template<InputPinConfig config>
+	inline constexpr makeInputPin_t<config> makeInputPin{};
+
+	template<AnalogPinConfig config>
+	struct makeAnalogPin_t
+	{
+		template<class Board>
+		constexpr void operator()(Board board) const
+		{
+			using board::gpio::MODER::ModerVal;
+			constexpr auto pinIndex = uint8_c<config.pin.pin>;
+			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>); 
+			
+			gpioX.enable();
+            reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::ANALOG>);
+		}
+	};
+
+	template<AnalogPinConfig config>
+	inline constexpr makeAnalogPin_t<config> makeAnalogPin {};
+
+	template<AltFnPinConfig config>
+	struct makeAltFnPin_t
+	{
+		template<class Board>
+		constexpr void operator()(Board board) const
+		{
+			using board::gpio::MODER::ModerVal;
+			constexpr auto pinIndex = uint8_c<config.pin.pin>;
+			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>); 
+			
+			gpioX.enable();
+            reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::ALTERNATE_FUNCTION>);
+			reg::write(gpioX, board::gpio::OSPEEDR::OSPEEDR[pinIndex], constant_c<config.speed>);
+			reg::write(gpioX, board::gpio::PUPDR::PUPDR[pinIndex], constant_c<config.pullUpDown>);
+			reg::write(gpioX, board::gpio::OTYPER::OT[pinIndex], constant_c<config.outType>);
+			reg::write(gpioX, board::gpio::AFR::AFR[pinIndex], constant_c<config.altFn>);
+		}
+	};
+
+	template<AltFnPinConfig config>
+	inline constexpr makeAltFnPin_t<config> makeAltFnPin {};
+	
 	namespace detail
 	{
-        MAKE_OPTION_KEY(OUTPUT_TYPE);
-        MAKE_OPTION_KEY(PUPD);
-        MAKE_OPTION_KEY(ALT_FUNCTION);
-        MAKE_OPTION_KEY(SPEED);
-        MAKE_OPTION_KEY(INTERRUPT);
-
 		template<std::uint8_t pin>
         constexpr auto getInterrupt(uint8_<pin>)
         {
@@ -37,153 +177,54 @@ namespace drivers::gpio
             	return board::Interrupts::EXTI15_10;
         }
 	}
-    
-	namespace AltFn
+
+	template<InputInterruptPinConfig config>
+	struct makeInputInterruptPin_t 
 	{
-		constexpr auto SYSTEM             = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::SYSTEM>);
-		constexpr auto TIMER1_2           = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::TIMER1_2>);
-		constexpr auto TIMER3_5           = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::TIMER3_5>);
-		constexpr auto TIMER8_11          = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::TIMER8_11>);
-		constexpr auto I2C                = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::I2C>);
-		constexpr auto SPI1_2             = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::SPI1_2>);
-		constexpr auto SPI3               = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::SPI3>);
-		constexpr auto USART1_3           = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::USART1_3>);
-		constexpr auto USART4_6           = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::USART4_6>);
-		constexpr auto CAN1_2_TIMER_12_14 = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::CAN1_2_TIMER_12_14>);
-		constexpr auto OTG_FS_HS          = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::OTG_FS_HS>);
-		constexpr auto ETH                = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::ETH>);
-		constexpr auto FSMC_SDIO_OTG_HS   = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::FSMC_SDIO_OTG_HS>);
-		constexpr auto DCMI               = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::DCMI>);
-		constexpr auto EVENTOUT           = opt::makeOption(detail::ALT_FUNCTION, constant_c<detail::AfrVal::EVENTOUT>);
-	}
+		template<class Board>
+		constexpr auto operator()(Board board) const
+		{
+			using board::gpio::MODER::ModerVal;
+			constexpr auto pinIndex = uint8_c<config.pin.pin>;
+			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>); 
+			constexpr auto exti = board.getPeripheral(PeripheralTypes::EXTI);
+			constexpr auto syscfg = board.getPeripheral(PeripheralTypes::SYSCFG);
 
-    namespace OutType
-	{
-        constexpr auto PUSH_PULL  = opt::makeOption(detail::OUTPUT_TYPE, constant_c<detail::OtyperVal::PUSH_PULL>);
-		constexpr auto OPEN_DRAIN = opt::makeOption(detail::OUTPUT_TYPE, constant_c<detail::OtyperVal::OPEN_DRAIN>);
-	}
+			gpioX.enable();
+			syscfg.enable();
+			exti.enable();
 
-	namespace PuPd
-	{
-		constexpr auto NO_PULL   = opt::makeOption(detail::PUPD, constant_c<detail::PupdrVal::NO_PULL>);
-		constexpr auto PULL_UP   = opt::makeOption(detail::PUPD, constant_c<detail::PupdrVal::PULL_UP>);;
-		constexpr auto PULL_DOWN = opt::makeOption(detail::PUPD, constant_c<detail::PupdrVal::PULL_DOWN>);;
-	}
-	
-	namespace Speed
-	{
-		constexpr auto LOW       = opt::makeOption(detail::SPEED, constant_c<detail::OspeedrVal::LOW>);
-		constexpr auto MEDIUM    = opt::makeOption(detail::SPEED, constant_c<detail::OspeedrVal::MEDIUM>);
-		constexpr auto HIGH      = opt::makeOption(detail::SPEED, constant_c<detail::OspeedrVal::HIGH>);
-		constexpr auto VERY_HIGH = opt::makeOption(detail::SPEED, constant_c<detail::OspeedrVal::VERY_HIGH>);
-	}
+            reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::INPUT>);
+			reg::write(gpioX, board::gpio::PUPDR::PUPDR[pinIndex], constant_c<config.pullUpDown>);
+			reg::write(syscfg, board::syscfg::EXTICR::EXTI[pinIndex], uint32_c<config.pin.port>);
 
-	namespace Interrupt
-	{
-		constexpr auto RISING_EDGE = opt::makeOption(detail::INTERRUPT, hana::type_c<detail::RisingEdgeInterrupt>);
-		constexpr auto FALLING_EDGE = opt::makeOption(detail::INTERRUPT, hana::type_c<detail::FallingEdgeInterrupt>);
-		constexpr auto RISING_FALLING_EDGE = opt::makeOption(detail::INTERRUPT, hana::type_c<detail::RisingFallingEdgeInterrupt>);
-	}
+			if constexpr (config.interrupt == Interrupt::RISING_EDGE)
+			{
+				reg::set(exti, board::exti::RTSR::TR[pinIndex]);
+                reg::clear(exti, board::exti::FTSR::TR[pinIndex]);
+			}
+			else if constexpr (config.interrupt == Interrupt::FALLING_EDGE)
+			{
+				reg::clear(exti, board::exti::RTSR::TR[pinIndex]);
+                reg::set(exti, board::exti::FTSR::TR[pinIndex]);
+			}
+			else
+			{
+				reg::set(exti, board::exti::RTSR::TR[pinIndex]);
+                reg::set(exti, board::exti::FTSR::TR[pinIndex]);
+			}
 
-    /**
-     * @brief Create an output pin gpio
-     **/
-	template<class Board, std::uint8_t portNo, std::uint8_t pinNo, class ... Options>
-	constexpr auto makeOutputPin(
-		Board board, 
-		Pin<portNo, pinNo>,
-		Options && ... opts)
-	{
-		constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<portNo>); 
+			constexpr auto interrupt = detail::getInterrupt(pinIndex);
+			board.enableIRQ(interrupt);
 
-        auto options = opt::makeOptionSet(
-			opt::fields(detail::OUTPUT_TYPE, detail::SPEED, detail::PUPD),
-			std::forward<Options>(opts)...);
-		
-        auto speed   = opt::getOrDefault(options, detail::SPEED, Speed::LOW);
-        auto outType = opt::getOrDefault(options, detail::OUTPUT_TYPE, OutType::PUSH_PULL);
-        auto pupd    = opt::getOrDefault(options, detail::PUPD, PuPd::NO_PULL);
+			return InputInterruptPin<
+				decltype(gpioX), 
+				decltype(exti),  
+				config.pin.port, 
+				config.pin.pin>(board.getInterruptEvent(interrupt));
+		}
+	};
 
-        detail::OutputPinConfig<portNo, pinNo, 
-			hana::value(speed), 
-			hana::value(pupd), 
-			hana::value(outType)>::apply(gpioX);
-
-		return OutputPin<decltype(gpioX), portNo, pinNo>{};
-	}
-
-	template<class Board, 
-		std::uint8_t portNo, 
-		std::uint8_t pinNo, 
-		class ... Options>
-	auto makeInputPin(Board board, Pin<portNo, pinNo>, Options && ... opts)
-	{
-		constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<portNo>); 
-
-        auto options = opt::makeOptionSet(opt::fields(detail::PUPD), std::forward<Options>(opts)...);
-        auto pupd = opt::getOrDefault(options, detail::PUPD, PuPd::NO_PULL);
-
-        detail::InputPinConfig<portNo, pinNo, hana::value(pupd)>::apply(gpioX);
-
-		return InputPin<decltype(gpioX), portNo, pinNo>{};
-	}
-
-	template<class Board,std::uint8_t portNo, std::uint8_t pinNo>
-	void makeAnalogPin(Board board, Pin<portNo, pinNo>)
-	{
-        detail::AnalogPinConfig<portNo, pinNo>::apply(board.getPeripheral(PeripheralTypes::GPIO<portNo>));
-    }
-
-	template<class Board, std::uint8_t portNo, std::uint8_t pinNo, class ... Options>
-	void makeAltFnPin(Board board, Pin<portNo, pinNo>, Options && ... opts)
-	{
-		constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<portNo>); 
-
-		auto options = opt::makeOptionSet(
-			opt::fields(detail::OUTPUT_TYPE, detail::SPEED, detail::PUPD, detail::ALT_FUNCTION),
-			std::forward<Options>(opts)...);
-
-        auto speed   = opt::getOrDefault(options, detail::SPEED, Speed::LOW);
-        auto outType = opt::getOrDefault(options, detail::OUTPUT_TYPE, OutType::PUSH_PULL);
-        auto pupd    = opt::getOrDefault(options, detail::PUPD, PuPd::NO_PULL);
-		auto altFn   = opt::get(options, detail::ALT_FUNCTION);
-
-        detail::AltFnPinConfig<portNo, pinNo, 
-            hana::value(altFn), 
-            hana::value(speed), 
-            hana::value(pupd), 
-            hana::value(outType)>::apply(gpioX);
-	}
-
-	template<class Board, std::uint8_t portNo, std::uint8_t pinNo, class ... Options>
-	auto makeInputInterruptPin(Board board, Pin<portNo, pinNo>, Options && ... opts)
-	{
-		constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<portNo>); 
-		constexpr auto exti = board.getPeripheral(PeripheralTypes::EXTI);
-		constexpr auto syscfg = board.getPeripheral(PeripheralTypes::SYSCFG);
-
-		auto options = opt::makeOptionSet(
-			opt::fields(detail::PUPD, detail::INTERRUPT),
-			std::forward<Options>(opts)...);
-
-		static_assert(hana::contains(options, detail::INTERRUPT), "Interrupt type must be supplied");
-
-        auto pupd = opt::getOrDefault(options, detail::PUPD, PuPd::NO_PULL);
-		auto interruptType = opt::get(options, detail::INTERRUPT);
-		using InterruptConfig = typename decltype(interruptType)::type;
-
-		detail::InputPinConfig<portNo, pinNo, hana::value(pupd)>::apply(gpioX);
-		detail::InterruptBaseConfig::apply(exti, syscfg, uint8_c<portNo>, uint8_c<pinNo>);
-		InterruptConfig::apply(exti, syscfg, uint8_c<portNo>, uint8_c<pinNo>);
-
-		constexpr auto interrupt = detail::getInterrupt(uint8_c<pinNo>);
-		board.enableIRQ(interrupt);
-
-		return InputInterruptPin<
-			decltype(gpioX), 
-			decltype(exti),  
-			portNo, 
-			pinNo>(board.getInterruptEvent(interrupt));
-	}
-
+	template<InputInterruptPinConfig config>
+	inline constexpr makeInputInterruptPin_t<config> makeInputInterruptPin{};
 }

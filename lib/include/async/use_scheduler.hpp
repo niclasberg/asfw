@@ -1,7 +1,7 @@
 #pragma once
 #include "tmp/tag_invoke.hpp"
 #include "scheduler.hpp"
-#include "sender.hpp"
+#include "future.hpp"
 #include "receiver.hpp"
 
 namespace async
@@ -20,17 +20,10 @@ namespace async
 
             }
 
-            template<class ... Values>
-                requires ReceiverOf<R, Values...>
-            void setValue(Values && ... values) &&
-            {
-                async::setValue(std::move(innerReceiver_), static_cast<Values&&>(values)...);
-            }
-
             template<class T>
-            void setSignal(T && signal)
+            void setValue(T && value) &&
             {
-                async::setSignal(innerReceiver_, static_cast<T&&>(signal));
+                async::setValue(std::move(innerReceiver_), static_cast<T&&>(value));
             }
 
             template<class E>
@@ -45,13 +38,6 @@ namespace async
             }
 
         private:
-            /*template<class Cpo, class ... Args>
-            friend auto tag_invoke(Cpo cpo, Self && self, Args &&... args) 
-                -> decltype(cpo(static_cast<Self&&>(self).innerReceiver_, static_cast<Args&&>(args)...))
-            {
-                return cpo(static_cast<Self&&>(self).innerReceiver_, static_cast<Args&&>(args)...);
-            }*/
-
             friend S & tag_invoke(getScheduler_t, const UseSchedulerReceiver & self)
             {
                 return self.scheduler_;
@@ -61,18 +47,12 @@ namespace async
             S & scheduler_;
         };
 
-        template<Scheduler S, Sender ParentSender>
+        template<Scheduler S, AnyFuture ParentSender>
         class UseSchedulerSender
         {
         public:
-            template<template<typename...> class Variant, template<typename...> class Tuple>
-            using value_types = SenderValueTypes<ParentSender, Variant, Tuple>;
-
-            template<template<typename...> class Variant>
-            using signal_types = SenderSignalTypes<ParentSender, Variant>;
-
-            template<template<typename...> class Variant>
-            using error_types = SenderErrorTypes<ParentSender, Variant>;
+            using value_type = future_value_t<ParentSender>;
+            using error_type = future_error_t<ParentSender>;
 
             template<class ParentSender2>
             UseSchedulerSender(S & scheduler, ParentSender2 && parentSender) 
@@ -84,7 +64,7 @@ namespace async
 
             template<class R>
             auto connect(R && receiver) &&
-                -> ConnectResultType<ParentSender, UseSchedulerReceiver<S, std::remove_cvref_t<R>>>
+                -> connect_result_t<ParentSender, UseSchedulerReceiver<S, std::remove_cvref_t<R>>>
             {
                 return async::connect(
                     std::move(parentSender_),
@@ -105,7 +85,7 @@ namespace async
 
     inline constexpr struct useScheduler_t final
     {
-        template<Scheduler S, Sender ParentSender>
+        template<Scheduler S, AnyFuture ParentSender>
         auto operator()(S & scheduler, ParentSender && parentSender) const
             -> detail::UseSchedulerSender<std::remove_cvref_t<S>, std::remove_cvref_t<ParentSender>>
         {

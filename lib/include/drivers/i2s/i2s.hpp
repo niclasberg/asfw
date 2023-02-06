@@ -1,10 +1,10 @@
 #pragma once
 #include "board/regmap/spi.hpp"
 #include "drivers/dma/dma_concepts.hpp"
+#include "drivers/spi/detail/write.hpp"
 #include "drivers/spi/detail/write_dma.hpp"
 #include "async/event.hpp"
-#include "async/make_source_sender.hpp"
-#include "detail/write.hpp"
+#include "async/make_future.hpp"
 
 namespace drivers::i2s
 {
@@ -25,17 +25,19 @@ namespace drivers::i2s
          * @param size Array size
          * @return true on success, false otherwise
          */
-        auto write(std::uint16_t * data, std::uint32_t size)
+        async::Future<void, spi::SpiError> auto write(std::uint16_t * data, std::uint32_t size)
         {
-            return async::makeSourceSender<spi::SpiError>(
-                [this, data, size]<typename R>(R && receiver) -> detail::WriteOperation<SpiX, std::uint16_t, std::remove_cvref_t<R>>
+            return async::makeFuture<void, spi::SpiError>(
+                [this, data, size]<typename R>(R && receiver) -> 
+                    spi::detail::WriteOperation<SpiX, std::uint16_t, spi::detail::WriteOperationType::TX_ONLY_I2S, std::remove_cvref_t<R>>
                 {
                     return {static_cast<R&&>(receiver), interruptSource_, data, size};
                 });
         }
 
-        template<dma::DmaLike Dma>
-        auto writeContinuous(Dma & dmaDevice, std::uint16_t * data[2], std::uint32_t size)
+        template<dma::DmaLike Dma, std::invocable<std::uint16_t *, std::uint32_t> F>
+        async::Future<void, spi::SpiError> auto writeContinuous(
+            Dma & dmaDevice, std::uint16_t * data[2], std::uint32_t size, F && callback)
         {
             return spi::detail::writeDoubleBufferedDma(SpiX{}, dmaDevice, data, size);
         }

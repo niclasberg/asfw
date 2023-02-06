@@ -9,8 +9,6 @@
 
 using MockI2C = MockPeripheral<board::i2c::tag>;
 using MockGpio = MockPeripheral<board::gpio::tag>;
-using MockExti = MockPeripheral<board::exti::tag>;
-using MockSysCfg = MockPeripheral<board::syscfg::tag>;
 
 namespace {
     async::Event eventInterrupt;
@@ -21,8 +19,6 @@ struct MockPeripherals
 {
     constexpr MockI2C getPeripheral(PeripheralTypes::tags::I2c<0>) const { return {}; }
     constexpr MockGpio getPeripheral(PeripheralTypes::tags::Gpio<0>) const { return {}; }
-    constexpr MockExti getPeripheral(PeripheralTypes::tags::Exti) const { return {}; }
-    constexpr MockSysCfg getPeripheral(PeripheralTypes::tags::SysCfg) const { return {}; }
 
     async::EventEmitter getInterruptEvent(decltype(board::Interrupts::I2C1_EV)) { return {&eventInterrupt}; }
     async::EventEmitter getInterruptEvent(decltype(board::Interrupts::I2C1_ER)) { return {&errorInterrupt}; }
@@ -61,21 +57,23 @@ TEST_CASE("I2C")
     using namespace drivers;
     auto mockI2C = MockI2C{};
     resetPeripheral(mockI2C);
-    auto mockBoard = makeMockBoard(apb1ClockFrequency<8000000>, mockPeripherals<MockPeripherals>);
+    MockBoard<MockPeripherals, MockClockConfig { .apb1ClockFrequency = 8000000 }> mockBoard;
     async::EventEmitter eventEmitter{&eventInterrupt};
     async::EventEmitter errorEmitter{&errorInterrupt};
     eventEmitter.unsubscribe();
     errorEmitter.unsubscribe();
     auto scheduler = async::InlineScheduler{};
+    constexpr i2c::MasterConfig config
+    {
+        .deviceId = 0,
+        .clockPin = Pin(0, 0), 
+        .dataPin = Pin(0, 0),
+        .serialClockFrequency = 100'000
+    };
 
     SECTION("Init in standard mode")
     {
-        i2c::makeI2CMaster(
-            mockBoard, 
-            deviceId<0>,
-            i2c::serialClockFrequency<100000>,
-            i2c::clockPin<0, 0>,
-            i2c::dataPin<0, 0>);
+        i2c::makeI2c<config>(mockBoard);
 
         REQUIRE(isEnabled(mockI2C));
         REQUIRE(reg::read(mockI2C, board::i2c::CR2::FREQ) == 8);
@@ -87,12 +85,7 @@ TEST_CASE("I2C")
 
     SECTION("Should fullfill the I2cLike concept")
     {
-        auto dev = i2c::makeI2CMaster(
-            mockBoard, 
-            deviceId<0>,
-            i2c::serialClockFrequency<100000>,
-            i2c::clockPin<0, 0>,
-            i2c::dataPin<0, 0>);
+        auto dev = i2c::makeI2c<config>(mockBoard);
         
         STATIC_REQUIRE(i2c::I2cLike<decltype(dev)>);
     }
@@ -101,7 +94,7 @@ TEST_CASE("I2C")
     {
         bool valueReceived = false;
         std::uint8_t data = 0xF1;
-        auto dev = i2c::makeI2CMaster(mockBoard, deviceId<0>, i2c::clockPin<0, 0>, i2c::dataPin<0, 0>);
+        auto dev = i2c::makeI2c<config>(mockBoard);
 
         auto op = async::connect(
             dev.write(0x10, &data, 1),
@@ -139,7 +132,7 @@ TEST_CASE("I2C")
     SECTION("Read single byte")
     {
         bool valueReceived = false;
-        auto dev = i2c::makeI2CMaster(mockBoard, deviceId<0>, i2c::clockPin<0, 0>, i2c::dataPin<0, 0>);
+        auto dev = i2c::makeI2c<config>(mockBoard);
         std::uint8_t data = 0;
 
         auto op = async::connect(
@@ -168,7 +161,7 @@ TEST_CASE("I2C")
         std::uint8_t writeBuffer[1] = {0xF4};
         std::uint8_t readBuffer[1] = {0};
         bool valueReceived = false;
-        auto dev = i2c::makeI2CMaster(mockBoard, deviceId<0>, i2c::clockPin<0, 0>, i2c::dataPin<0, 0>);
+        auto dev = i2c::makeI2c<config>(mockBoard);
 
         auto op = async::connect(
             dev.writeAndRead(0x10, writeBuffer, 1, readBuffer, 1),
@@ -200,7 +193,6 @@ TEST_CASE("I2C")
         REQUIRE(reg::read(mockI2C, board::i2c::DR::DR) == 0x21);
 
         doAddressPhase();
-
     }
 
     /*SECTION("Write single byte (interrupt)")

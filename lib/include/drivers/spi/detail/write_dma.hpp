@@ -1,31 +1,31 @@
 #pragma once
+#include <array>
 #include "async/receiver.hpp"
-#include "async/sender.hpp"
+#include "async/make_future.hpp"
 #include "async/scheduler.hpp"
 #include "drivers/dma/dma_concepts.hpp"
 #include "drivers/dma/dma_signal.hpp"
 #include "../spi_error.hpp"
-#include <array>
-
 #include "delegate.hpp"
 #include "reg/bit_is_set.hpp"
 
 namespace drivers::spi::detail
 {
-    template<class SpiX, class DataType, class TransferFactory, class R>
+    template<class SpiX, class DataType, class TransferFactory, class R, class F>
     class WriteDmaOperation
     {
         struct DmaEventHandler
         {
             void operator()(dma::DmaSignal signal)
             {
+                auto & s = async::getScheduler(op_.receiver_);
                 switch (signal)
                 {
                     case dma::DmaSignal::TRANSFER_COMPLETE:
-                        op_.setBuffer0Next();
+                        s.postFromISR({memFn<&WriteDmaOperation::fillBuffer0>, op_});
                         break;
                     case dma::DmaSignal::TRANSFER_COMPLETE_MEMORY1:
-                        op_.setBuffer1Next();
+                        s.postFromISR({memFn<&WriteDmaOperation::fillBuffer1>, op_});
                         break;
                     default:
                         break;
@@ -66,70 +66,48 @@ namespace drivers::spi::detail
         }
 
     private:
-        void setBuffer0Next()
+        void fillBuffer0()
         {
-            auto & s = async::getScheduler(receiver_);
-            s.postFromISR({memFn<&WriteDmaOperation::setBuffer0NextImpl>, *this});
+            callback_(buffer0_);
         }
 
-        void setBuffer1Next()
+        void fillBuffer1()
         {
-            auto & s = async::getScheduler(receiver_);
-            s.postFromISR({memFn<&WriteDmaOperation::setBuffer1NextImpl>, *this});
-        }
-
-        void setBuffer0NextImpl()
-        {
-            async::setSignal(receiver_, buffer0_);
-        }
-
-        void setBuffer1NextImpl()
-        {
-            async::setSignal(receiver_, buffer1_);
+            callback_(buffer0_);
         }
 
         DmaTransfer transfer_;
         R receiver_;
         DataType * buffer0_;
         DataType * buffer1_;
+        F callback_;
     };
 
-    template<class SpiX, class DataType, dma::DmaTransferFactory TransferFactory>
-    struct WriteDmaSender
-    {
-        template<template<typename...> class Variant, template<typename...> class Tuple>
-        using value_types = Variant<Tuple<>>;
-
-        template<template<typename...> class Variant>
-        using signal_types = Variant<DataType *>;
-
-        template<template<typename...> class Variant>
-        using error_types = Variant<SpiError>;
-
-        template<class R>
-        auto connect(R && receiver) && 
-            -> WriteDmaOperation<SpiX, DataType, TransferFactory, std::remove_cvref_t<R>>
-        {
-            return {std::move(_transferFactory), static_cast<R&&>(receiver), buffer0_, buffer1_};
-        }
-
-        TransferFactory _transferFactory;
-        DataType * buffer0_;
-        DataType * buffer1_;
-    };
-
-    template<class SpiX, dma::DmaLike Dma, class DataType>
-    auto writeDoubleBufferedDma(SpiX spiX, Dma & dmaDevice, DataType * data[2], std::uint32_t size)
+    template<class SpiX, dma::DmaLike Dma, class DataType, class F>
+    async::Future<void, SpiError> auto writeDoubleBufferedDma(
+        SpiX spiX, 
+        Dma & dmaDevice, 
+        DataType * data[2], 
+        std::uint32_t size, 
+        F && callback)
     {
         auto transferFactory = dmaDevice.transferDoubleBuffered(
             dma::MemoryAddressPair(reinterpret_cast<std::uint32_t>(data[0]), reinterpret_cast<std::uint32_t>(data[1])),
             dma::PeripheralAddress(spiX.getAddress(board::spi::DR::_Offset{})),
             size);
+
+        using TransferFactoryType = decltype(transferFactory);
+        using CallbackType = std::remove_cvref_t<F>;
         
-        return WriteDmaSender<SpiX, DataType, decltype(transferFactory)>{
-            std::move(transferFactory), 
-            data[0], 
-            data[1]
-        };
+        return async::makeFuture<void, SpiError>(
+            [=]<typename R>(R && receiver)
+                -> WriteDmaOperation<SpiX, DataType, TransferFactoryType, std::remove_cvref_t<R>, CallbackType>
+            {
+                return {
+                    std::move(transferFactory), 
+                    data[0], 
+                    data[1]
+                };
+            });
     }
 }

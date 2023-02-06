@@ -3,6 +3,7 @@
 #include "../mocks/mock_peripheral.hpp"
 #include "../mocks/mock_board.hpp"
 #include "drivers/uart.hpp"
+#include <async/future.hpp>
 
 using MockUart = MockPeripheral<board::uart::tag>;
 using MockGpio = MockPeripheral<board::gpio::tag>;
@@ -58,8 +59,8 @@ TEST_CASE("Uart")
 #define TEST_BAUD_RATE(PCKL, BAUD, MANTISSA, FRACTION) \
     SECTION("Test baud rate (pckl " #PCKL " Mhz, br " #BAUD " bps)") \
     { \
-        auto mockBoard = makeMockBoard(apb1ClockFrequency<PCKL>, mockPeripherals<MockPeripherals>); \
-        uart::makeUart(mockBoard, deviceId<3>, uart::baudRate<BAUD>, uart::txPin<0, 0>, uart::rxPin<0, 0>); \
+        auto mockBoard = MockBoard<MockPeripherals, MockClockConfig { .apb1ClockFrequency = PCKL }>{}; \
+        uart::makeUart<uart::UartConfig { uart::UartId(3), BAUD, Pin(0, 0), Pin(0, 0) } >(mockBoard); \
         REQUIRE(reg::read(MockUart{}, board::uart::BRR::DIV_Mantissa) == MANTISSA); \
         REQUIRE(reg::read(MockUart{}, board::uart::BRR::DIV_Fraction) == FRACTION); \
     } 
@@ -88,8 +89,8 @@ TEST_CASE("Uart")
 #define TEST_FRAME_FORMAT(FORMAT, MVAL, PSVAL, PCEVAL, STOPVAL) \
     SECTION("Test data format: " #FORMAT ")") \
     { \
-        auto mockBoard = makeMockBoard(mockPeripherals<MockPeripherals>, apb1ClockFrequency<2000000>); \
-        uart::makeUart(mockBoard, deviceId<3>, uart::baudRate<9600>, uart::txPin<0, 0>, uart::rxPin<0, 0>, uart::FrameFormat::_##FORMAT); \
+        auto mockBoard = MockBoard<MockPeripherals, MockClockConfig { .apb1ClockFrequency = 2000000 }>{}; \
+        uart::makeUart<uart::UartConfig { uart::UartId(3), 9600, Pin(0, 0), Pin(0, 0), uart::FrameFormat::_##FORMAT }>(mockBoard); \
         REQUIRE(reg::read(MockUart{}, board::uart::CR1::M) == MVAL); \
         REQUIRE(reg::read(MockUart{}, board::uart::CR1::PS) == PSVAL); \
         REQUIRE(reg::read(MockUart{}, board::uart::CR1::PCE) == PCEVAL); \
@@ -112,4 +113,18 @@ TEST_CASE("Uart")
     TEST_FRAME_FORMAT(8O2, 1, 1, 1, 2);
 
 #undef TEST_FRAME_FORMAT
+
+    SECTION("Write should return a future")
+    {
+        auto mockBoard = MockBoard<MockPeripherals, MockClockConfig { .apb1ClockFrequency = 2000000 }>{}; \
+        auto device = uart::makeUart<uart::UartConfig { 
+            uart::UartId(3), 9600, Pin(0, 0), Pin(0, 0), uart::FrameFormat::_8N1 
+        }>(mockBoard);
+
+        using FutureType = decltype(device.write(std::declval<std::uint8_t *>(), 0));
+        STATIC_REQUIRE(std::move_constructible<FutureType>);
+        STATIC_REQUIRE(std::destructible<FutureType>);
+        STATIC_REQUIRE(async::detail::has_future_types<FutureType>);
+        STATIC_REQUIRE(async::Future<FutureType, void, uart::UartError>);
+    }
 }

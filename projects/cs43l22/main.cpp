@@ -16,11 +16,7 @@
 #include <async/on_signal.hpp>
 
 #include <schedulers/cooperative_scheduler.hpp>
-
-#include "Oscillator.h"
-#include "Filter.h"
-#include "Envelope.h"
-#include "InputController.h"
+#include "app.hpp"
 
 #include <cstring>
 #include <cmath>
@@ -28,12 +24,30 @@
 using namespace drivers;
 using namespace schedulers;
 
+// Pinout
+// I2S3 (audio data stream to cs43l22 audio DAC)
+// Pins: MCKL (PC7), SCKL (PC10), SerialData (PC12), WordSelect (PA4)
+constexpr auto I2S_MASTER_CLOCK_PIN = Pin(2, 7);
+constexpr auto I2S_SERIAL_CLOCK_PIN = Pin(2, 10);
+constexpr auto I2S_SERIAL_DATA_PIN = Pin(2, 12);
+constexpr auto I2S_WORD_SELECT_PIN = Pin(0, 4);
+
+// I2C1 (control interface for cs43l22 audio DAC)
+// Pins: SCKL (PB6) and SDA (PB9)
+constexpr auto I2C1_CLOCK_PIN = Pin(1, 6);
+constexpr auto I2C1_DATA_PIN = Pin(1, 9);
+
+// I2C3 (handles communication with the Vl6180 range finder)
+constexpr auto I2C3_CLOCK_PIN = Pin(0, 8);
+constexpr auto I2C3_DATA_PIN = Pin(2, 9);
+
 constexpr std::uint32_t SAMPLE_FREQ = 48'000;
 constexpr std::uint32_t BUFFER_SIZE = 128;
 namespace clock = board::clock;
 
 int main()
 {
+    // Setup all the clock dividers on the board
     auto boardDescriptor = board::makeBoard(
         clock::makeClockConfig(
             clock::pllInput(clock::PllSource::HSI, clock::divide<16>),
@@ -44,12 +58,11 @@ int main()
 			clock::Apb2Prescaler::DIV2));
     auto scheduler = makeCooperativeScheduler(boardDescriptor);
 
-    // Audio buffers
-    std::uint16_t audioBuffer0[2*BUFFER_SIZE];
-    std::uint16_t audioBuffer1[2*BUFFER_SIZE];
-    std::uint16_t * audioBuffers[2] = {audioBuffer0, audioBuffer1};
-	std::memset(audioBuffer0, 0, 2*BUFFER_SIZE);
-    std::memset(audioBuffer1, 0, 2*BUFFER_SIZE);
+    // Buffers
+    std::uint16_t audioBuffer0_[2*bufferSize];
+    std::uint16_t audioBuffer1_[2*bufferSize];
+    std::uint16_t * audioBuffers_[2] = {audioBuffer0, audioBuffer1};
+    std::uint16_t keyInputBuffer[10];
 
     // Setup I2S3 for audio streaming
     // Pins: MCKL (PC7), SCKL (PC10), SerialData (PC12), WordSelect (PA4)
@@ -119,43 +132,36 @@ int main()
         dac.init(),
         rangeFinder.init());
 
+    App app;
+
     if (status != async::CompletionStatus::COMPLETED_WITH_VALUE) { for (;;) { } }
 
-    Oscillator oscillator(SAMPLE_FREQ);
-    Filter filter{SAMPLE_FREQ};
-    Envelope envelope{SAMPLE_FREQ};
-    InputController inputController{keyInput, keyInputDma, envelope, oscillator};
-
     status = async::executeSync(scheduler, 
-        dacI2S.writeContinuous(i2sDma, audioBuffers, 2*BUFFER_SIZE)
-        | async::onSignal([&](std::uint16_t * buffer) {
-            for (int i = 0; i < BUFFER_SIZE; i += 1)
+        async::whenAll(
+            dacI2S.writeContinuous(i2sDma, audioBuffers, 2*BUFFER_SIZE, [&app](std::uint16_t * buffer) 
             {
-                std::int16_t val = (std::int16_t) (30000.f * 
-                    filter(oscillator()) * envelope());
-                *(buffer++) = val;
-                *(buffer++) = val;
-            }
-        }),
+                app.fillBuffer(buffer);
+            }),
 
-        rangeFinder.readRangeContinuous()
-        | async::onSignal([&filter](std::uint8_t range) {
-            filter.setCutoff(800.f * float(range) / 255.f + 10.f);
-        }),
+            rangeFinder.readRangeContinuous([&app](std::uint8_t range) 
+            {
+                app.processRangeValue(range);
+            }),
 
-        async::repeat(
-            async::delay(inputController.update(), 5))
-    );
+            async::repeat(
+                async::delay([&app, &keyInputDma, &keyInput, keyInputBuffer]() 
+                {
+                    return keyInput.read(keyInputDma, (std::uint16_t *)keyInputBuffer)
+                        | async::map()
+                }, 5))
+        ));
 
     for (;;) {}
 }
 
-
-extern "C" // Prevent name mangling
+extern "C" void SystemInit(void)
 {
-	void SystemInit(void)
-	{
-		/* Enable fpu */
-		*((volatile uint32_t *) 0xE000ED88) |= ((3UL << 10*2)|(3UL << 11*2));  // set CP10 and CP11 Full Access
-	}
+    // The board starts with the FPU disabled, and these registers
+    // can only be written to during boot. Enable it here: 
+    *((volatile uint32_t *) 0xE000ED88) |= ((3UL << 10*2)|(3UL << 11*2));  // set CP10 and CP11 Full Access
 }

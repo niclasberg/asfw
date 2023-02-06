@@ -118,49 +118,49 @@ namespace drivers::dma::detail
                 return false;
             }
 
-            constexpr auto streamId = uint8_c<streamIndex>;
+            constexpr auto streamIdx = uint8_c<streamIndex>;
 
             // Clear interrupt flags
             reg::apply(DmaX{}, 
-                reg::set(board::dma::IFCR::CTCIF[streamId]),
-                reg::set(board::dma::IFCR::CTEIF[streamId]),
-                reg::set(board::dma::IFCR::CDMEIF[streamId]),
-                reg::set(board::dma::IFCR::CFEIF[streamId]),
-                reg::set(board::dma::IFCR::CHTIF[streamId]));
+                reg::set(board::dma::IFCR::CTCIF[streamIdx]),
+                reg::set(board::dma::IFCR::CTEIF[streamIdx]),
+                reg::set(board::dma::IFCR::CDMEIF[streamIdx]),
+                reg::set(board::dma::IFCR::CFEIF[streamIdx]),
+                reg::set(board::dma::IFCR::CHTIF[streamIdx]));
 
             // Set address, mode, transfer direction and size
-            setMemoryAddressAndDirection(DmaX{}, streamId, srcAddress_, dstAddress_);
+            setMemoryAddressAndDirection(DmaX{}, streamIdx, srcAddress_, dstAddress_);
 
             if constexpr (mode == DmaMode::SINGLE_SHOT)
             {
                 reg::apply(DmaX{},
-                    reg::clear(board::dma::CR::DBM[streamId]),
-                    reg::clear(board::dma::CR::CIRC[streamId]));
+                    reg::clear(board::dma::CR::DBM[streamIdx]),
+                    reg::clear(board::dma::CR::CIRC[streamIdx]));
             }
             else if constexpr (mode == DmaMode::CIRCULAR)
             {
                 reg::apply(DmaX{},
-                    reg::clear(board::dma::CR::DBM[streamId]),
-                    reg::set(board::dma::CR::CIRC[streamId]));
+                    reg::clear(board::dma::CR::DBM[streamIdx]),
+                    reg::set(board::dma::CR::CIRC[streamIdx]));
             }
             else 
             {
                 reg::apply(DmaX{},
-                    reg::set(board::dma::CR::DBM[streamId]),
-                    reg::set(board::dma::CR::CIRC[streamId]));
+                    reg::set(board::dma::CR::DBM[streamIdx]),
+                    reg::set(board::dma::CR::CIRC[streamIdx]));
             }
 
             // Enable interrupts
             reg::apply(DmaX{}, 
-                reg::set(board::dma::CR::TCIE[streamId]),
-                reg::set(board::dma::CR::TEIE[streamId]),
-                reg::clear(board::dma::CR::HTIE[streamId]),
-                reg::clear(board::dma::CR::DMEIE[streamId]));
+                reg::set(board::dma::CR::TCIE[streamIdx]),
+                reg::set(board::dma::CR::TEIE[streamIdx]),
+                reg::clear(board::dma::CR::HTIE[streamIdx]),
+                reg::clear(board::dma::CR::DMEIE[streamIdx]));
 
-            reg::write(DmaX{}, board::dma::NDTR::NDT[streamId], size_);
+            reg::write(DmaX{}, board::dma::NDTR::NDT[streamIdx], size_);
 
             // Enable the dma stream
-            reg::set(DmaX{}, board::dma::CR::EN[streamId]);
+            reg::set(DmaX{}, board::dma::CR::EN[streamIdx]);
 
             return true;
         }

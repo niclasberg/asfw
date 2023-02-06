@@ -10,36 +10,37 @@ namespace tmp
         using apply = F<Ts...>;
     };
 
-    template<class T, template<typename...> class F>
-    using apply_ = typename T::template apply<F>;
+    template<class T>
+    inline constexpr bool is_type_list_v = false;
 
-    namespace detail
+    template<class ... Ts>
+    inline constexpr bool is_type_list_v<TypeList<Ts...>> = true;
+
+    /**
+     * @brief Concatanate two type lists
+     * 
+     * @tparam Ls 
+     * @tparam Rs 
+     * @return TypeList<Ls..., Rs...> 
+     */
+    template<class ... Ls, class ... Rs>
+    constexpr TypeList<Ls..., Rs...> operator+(TypeList<Ls...>, TypeList<Rs...>)
     {
-        template<class ... Ts> struct ConcatImpl;
-
-        template<class ... Ts>
-        struct ConcatImpl<TypeList<Ts...>>
-        {
-            using type = TypeList<Ts...>;
-        };
-
-        template<class ... T1, class ... T2, class ... Tail>
-        struct ConcatImpl<TypeList<T1...>, TypeList<T2...>, Tail...> : ConcatImpl<TypeList<T1..., T2...>, Tail...> { };
-
-        /*template<class ... T1, class ... T2, class ... T3, class ... T4, class ... Tail>
-        struct ConcatImpl<
-            TypeList<T1...>, TypeList<T2...>, TypeList<T3...>, TypeList<T4...>, Tail...>
-        : ConcatImpl<TypeList<T1..., T2..., T3..., T4...>, Tail...> { };
-
-        template<class ... T1, class ... T2, class ... T3, class ... T4, class ... T5, class ... T6, class ... T7, class ... T8, class ... Tail>
-        struct ConcatImpl<
-            TypeList<T1...>, TypeList<T2...>, TypeList<T3...>, TypeList<T4...>, 
-            TypeList<T5...>, TypeList<T6...>, TypeList<T7...>, TypeList<T8...>, Tail...>
-        : ConcatImpl<TypeList<T1..., T2..., T3..., T4..., T5..., T6..., T7..., T8...>, Tail...> { };*/
+        return {};
     }
 
     template<class ... Ts>
-    using concat_ = typename detail::ConcatImpl<Ts...>::type;
+        requires (is_type_list_v<Ts> && ...)
+    constexpr auto concat(Ts ... lists)
+    {
+        return (lists + ...);
+    }
+
+    template<class T, template<typename...> class F>
+    using apply_ = typename T::template apply<F>;
+
+    template<class ... Ts>
+    using concat_ = decltype(concat(std::declval<Ts>()...));
 
     namespace detail
     {

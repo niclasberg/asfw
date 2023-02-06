@@ -208,7 +208,7 @@ namespace board
 			};
 
 			/** Channel length (number of bits per audio channel) */
-			constexpr auto CHLEN = reg::RWField<_Offset, reg::BitMask32<0, 1>>{ };
+			constexpr auto CHLEN = reg::RWField<_Offset, reg::BitMask32<0, 1>, ChLenVal>{ };
 		};
 
 		/** I2S prescaler register */

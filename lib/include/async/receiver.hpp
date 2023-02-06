@@ -1,16 +1,23 @@
 #pragma once
 #include <type_traits>
 #include <concepts>
+#include "tmp/traits.hpp"
 #include "tmp/tag_invoke.hpp"
 
 namespace async
 {   
     inline constexpr struct setValue_t
     {
-        template<class R, class ... Args>
-        void operator()(R && r, Args && ... args) const
+        template<class R, class T>
+        void operator()(R && r, T && value) const
         {
-            static_cast<R &&>(r).setValue(static_cast<Args&&>(args)...);
+            static_cast<R&&>(r).setValue(static_cast<T&&>(value));
+        }
+
+        template<class R>
+        void operator()(R && r) const
+        {
+            static_cast<R&&>(r).setValue(tmp::Void{});
         }
     } setValue{};
 
@@ -26,11 +33,11 @@ namespace async
     inline constexpr struct setSignal_t
     {
         template<class R, class S>
-        void operator()(R & r, S && signal) const
+        void operator()(R && r, S && signal) const
         {
-            r.setSignal(static_cast<S&&>(signal));
+            static_cast<R&&>(r).setNext(static_cast<S&&>(signal));
         }
-    } setSignal{};
+    } setNext{};
 
     inline constexpr struct setError_t
     {
@@ -42,23 +49,29 @@ namespace async
     } setError{};
 
     template<typename R>
-    concept Receiver = 
+    concept AnyReceiver = 
         std::move_constructible<R> &&
         requires(std::remove_cvref_t<R> && r) {
             setDone(static_cast<R&&>(r));
         };
 
-    template<typename R>
-    concept VoidReceiver = 
-        Receiver<R> &&
-        requires(std::remove_cvref_t<R> && r) {
-            setValue(static_cast<R&&>(r));
-        };
+    template<typename R, class T, class E>
+    concept Receiver = 
+        AnyReceiver<R> &&
+        requires(std::remove_cvref_t<R> && r, tmp::wrap_void_t<T> && value) {
+            setValue(static_cast<R&&>(r), value);
+        } &&
+        (std::same_as<E, void> || requires(std::remove_cvref_t<R> && r, E && error) {
+            setError(static_cast<R&&>(r), error);
+        });
 
-    template<typename R, typename... Args>
-    concept ReceiverOf = 
-        Receiver<R> &&
-        requires(std::remove_cvref_t<R> && r, Args && ... args) {
-            setValue(static_cast<R&&>(r), static_cast<Args &&>(args)...);
-        };
+    template<typename R, class T, class E>
+    concept StreamReceiver = 
+        AnyReceiver<R> &&
+        requires(std::remove_cvref_t<R> && r, tmp::wrap_void_t<T> && value) {
+            setNext(r, value);
+        } &&
+        (std::same_as<E, void> || requires(std::remove_cvref_t<R> && r, E && error) {
+            setError(static_cast<R&&>(r), error);
+        });
 }

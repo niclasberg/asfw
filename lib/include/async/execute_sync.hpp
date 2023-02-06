@@ -1,139 +1,122 @@
 #pragma once
-#include "sender.hpp"
+#include "future.hpp"
 #include "scheduler.hpp"
-#include <tuple>
+#include "outcome.hpp"
 
 namespace async
 {
-    enum class CompletionStatus
-    {
-        COMPLETED_WITH_VALUE,
-        COMPLETED_WITH_ERROR,
-        COMPLETED_WITH_DONE
-    };
-
     namespace detail
     {
+        template<class T, class E>
         struct ExecutionState
         {
-            CompletionStatus status = CompletionStatus::COMPLETED_WITH_VALUE;
-            std::uint8_t numberOfCompletedTasks = 0;
+            // Just initialize to done for now
+            Outcome<T, E> outcome = Outcome<T, E>{done};
+            bool completed = false;
         };
 
-        template<class S>
+        template<class T, class E>
         class ExecuteSyncReceiver
         {
         public:
-            ExecuteSyncReceiver(S & scheduler, ExecutionState & status)
-            : scheduler_(scheduler)
-            , state_(status)
+            ExecuteSyncReceiver(ExecutionState<T, E> & status)
+                : state_(status)
             {
 
             }
 
-            void setValue() &&
+            template<class T2>
+            void setValue(T2 && value) &&
             {
-                state_.numberOfCompletedTasks += 1;
+                state_.outcome = makeSuccess<E>(static_cast<T2&&>(value));
+                state_.completed = true;
             }
 
-            template<class T>
-            void setSignal(T &&)
+            void setValue(tmp::Void &&) &&
             {
-                // Do nothing
+                state_.outcome = makeSuccess<E>();
+                state_.completed = true;
             }
 
             template<class E>
             void setError(E && e) &&
             {
-                state_.numberOfCompletedTasks += 1;
-                state_.status = CompletionStatus::COMPLETED_WITH_ERROR;
+                state_.outcome = makeError<T>(static_cast<E&&>(e));
+                state_.completed = true;
             }
 
             void setDone() && 
             {
-                state_.numberOfCompletedTasks += 1;
-                if (state_.status != CompletionStatus::COMPLETED_WITH_ERROR)
-                {
-                    state_.status = CompletionStatus::COMPLETED_WITH_DONE;
-                }
+                state_.outcome = makeDone<T, E>();
+                state_.completed = true;
             }
 
         private:
-            friend S & tag_invoke(getScheduler_t, const ExecuteSyncReceiver & self)
+            ExecutionState<T, E> & state_;
+        };
+
+        template<class S, class T, class E>
+        class ExecuteSyncOnSchedulerReceiver : public ExecuteSyncReceiver<T, E>
+        {
+        public:
+            ExecuteSyncOnSchedulerReceiver(S & scheduler, ExecutionState<T, E> & status)
+            : ExecuteSyncReceiver(status), scheduler_(scheduler)
+            {
+
+            }
+
+        private:
+            friend S & tag_invoke(getScheduler_t, const ExecuteSyncOnSchedulerReceiver & self)
             {
                 return self.scheduler_;
             }
 
             S & scheduler_;
-            ExecutionState & state_;
-        };
-
-        template<class S, class ... Senders>
-        class OperationTuple;
-
-        template<class S, class Sender, class ... TailSenders>
-        class OperationTuple<S, Sender, TailSenders...> : OperationTuple<S, TailSenders...>
-        {
-        public:
-            template<class Sender2, class ...TailSenders2>
-            OperationTuple(S & scheduler, ExecutionState & state, Sender2 && sender, TailSenders2 && ... tailSenders)
-            : OperationTuple<S, TailSenders...>(scheduler, state, static_cast<TailSenders2&&>(tailSenders)...)
-            , op_(async::connect(static_cast<Sender2&&>(sender), ExecuteSyncReceiver<S>{scheduler, state}))
-            {
-
-            }
-
-            void start()
-            {
-                op_.start();
-                OperationTuple<S, TailSenders...>::start();
-            }
-
-        private:
-            ConnectResultType<Sender, ExecuteSyncReceiver<S>> op_;
-        };
-
-        template<class S>
-        class OperationTuple<S>
-        {
-        public:
-            OperationTuple(S &, ExecutionState &) 
-            {
-
-            }
-
-            void start() { }
         };
     }
 
     inline constexpr struct executeSync_t final
     {
-        template<Scheduler Sched, Sender ... Senders>
-        CompletionStatus operator()(Sched & scheduler, Senders && ... senders) const
+        template<Scheduler Sched, AnyFuture F>
+        auto operator()(Sched & scheduler, F && future) const
+            -> Outcome<future_value_t<F>, future_error_t<F>>
         {
-            using OperationTupleType = detail::OperationTuple<std::remove_cvref_t<Sched>, std::remove_cvref_t<Senders>...>;
+            using T = future_value_t<F>;
+            using E = future_error_t<F>;
 
-            detail::ExecutionState executionState;
+            detail::ExecutionState<T, E> executionState;
 
-            auto operationTuple = OperationTupleType(
-                scheduler,
-                executionState,
-                static_cast<Senders&&>(senders)...
+            auto operation = connect(
+                static_cast<F&&>(future), detail::ExecuteSyncReceiver<T, E>{executionState}
             );
 
-            auto startOperations = [&]() 
-            { 
-                operationTuple.start();
-            };
+            auto startOperation = [&]() { operation.start(); };
 
-            scheduler.post(&startOperations);
+            scheduler.post(&startOperation);
 
-            while (executionState.numberOfCompletedTasks < sizeof...(Senders))
+            while (!executionState.completed)
             {
                 scheduler.poll();
             }
 
-            return executionState.status;
+            return executionState.outcome;
+        }
+
+        template<AnyFuture S>
+        constexpr auto operator()(S && future) const 
+            -> Outcome<future_value_t<S>, future_error_t<S>>
+        {
+            using T = future_value_t<S>;
+            using E = future_error_t<S>;
+
+            detail::ExecutionState<T, E> executionState;
+
+            auto operation = connect(
+                static_cast<S&&>(future), detail::ExecuteSyncReceiver<T, E>{executionState}
+            );
+            operation.start();
+
+            return executionState.outcome;
         }
     } executeSync {};
 }

@@ -1,31 +1,30 @@
 #pragma once
-#include "async/receiver.hpp"
-#include "async/stop_token.hpp"
 #include "async/event.hpp"
 #include "async/receiver.hpp"
 #include "async/scheduler.hpp"
 #include "../spi_error.hpp"
 #include "board/regmap/spi.hpp"
-#include "traits_helper.hpp"
 #include "reg/peripheral_operations.hpp"
 #include "reg/unchecked_read.hpp"
 #include "reg/unchecked_write.hpp"
 
 #include "reg/bit_is_set.hpp"
+#include "reg/apply.hpp"
 
 #include <type_traits>
 #include <cstdint>
 
 namespace drivers::spi::detail
 {
-    /**
-     * Base write operation. The Derived class can implement the following static functions:
-     * - void onStart(): called before interrupts are enabled and transmission is started
-     * - void onStop(): called once the transmission is finished, and after interrupts are disabled
-     * - void onEvent(): called in the interrupt handler, after a value has been transmitted
-     */
-    template<class SpiX, class DataType, async::VoidReceiver R, class Hooks>
-    class WriteOperation : async::EventHandlerImpl<WriteOperation<SpiX, DataType, R, Hooks>>
+    enum class WriteOperationType
+    {
+        FULL_DUPLEX_SPI,
+        HALF_DUPLEX_SPI,
+        TX_ONLY_SPI
+    };
+
+    template<class SpiX, class DataType, WriteOperationType opType, class R>
+    class WriteOperation : async::EventHandlerImpl<WriteOperation<SpiX, DataType, opType, R>>
     {
     public:
         template<class R2>
@@ -54,15 +53,15 @@ namespace drivers::spi::detail
                 return;
             }
 
-            if constexpr (hasOnStart<Hooks>) 
-            {
-                Hooks::onStart();
-            }
-
             if (!interruptEvent_.subscribe(this))
             {
                 async::setError(std::move(receiver_), SpiError::BUSY);
                 return;
+            }
+
+            if constexpr (opType == WriteOperationType::HALF_DUPLEX_SPI) 
+            {
+                reg::set(SpiX{}, board::spi::CR1::BIDIOE);
             }
 
             reg::apply(SpiX{},
@@ -87,11 +86,6 @@ namespace drivers::spi::detail
                 return;
             }
 
-            if constexpr (hasOnEvent<Hooks>) 
-            {
-                Hooks::onEvent();
-            }
-
             if (reg::bitIsSet(SpiX{}, board::spi::SR::MODF))
             {
                 stop();
@@ -106,9 +100,11 @@ namespace drivers::spi::detail
                 reg::clear(board::spi::CR2::ERRIE));
             interruptEvent_.unsubscribe();
 
-            if constexpr (hasOnStop<Hooks>) 
+            if constexpr (opType == WriteOperationType::FULL_DUPLEX_SPI) 
             {
-                Hooks::onStop();
+                // Clear the overrun flag by reading the dataregister, followed by the status register
+                reg::uncheckedRead(SpiX{}, board::spi::DR::_Offset{});
+                reg::uncheckedRead(SpiX{}, board::spi::SR::_Offset{});
             }
         }
 
@@ -143,38 +139,4 @@ namespace drivers::spi::detail
         const std::uint32_t size_;
         volatile SpiError error_;
     };
-
-    template<class SpiX>
-    struct FullDuplexWriteHooks
-    {
-        static void onStop()
-        {
-            // Clear the overrun flag by reading the dataregister, followed by the status register
-            reg::uncheckedRead(SpiX{}, board::spi::DR::_Offset{});
-            reg::uncheckedRead(SpiX{}, board::spi::SR::_Offset{});
-        }
-    };
-
-    template<class SpiX, class DataType, async::VoidReceiver R>
-    using FullDuplexWriteOperation = WriteOperation<SpiX, DataType, R, FullDuplexWriteHooks<SpiX>>;
-
-    template<class SpiX>
-    struct HalfDuplexWriteHooks
-    {
-        static void onStart()
-        {
-            reg::set(SpiX{}, board::spi::CR1::BIDIOE);
-        }
-    };
-
-    template<class SpiX, class DataType, async::VoidReceiver R>
-    using HalfDuplexWriteOperation = WriteOperation<SpiX, DataType, R, HalfDuplexWriteHooks<SpiX>>;
-
-    struct TxOnlyWriteHooks
-    {
-        
-    };
-
-    template<class SpiX, class DataType, async::VoidReceiver R>
-    using TxOnlyWriteOperation = WriteOperation<SpiX, DataType, R, TxOnlyWriteHooks>;
 }

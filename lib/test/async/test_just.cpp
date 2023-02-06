@@ -1,23 +1,16 @@
 #include "../catch.hpp"
 #include "async/just.hpp"
 #include "async/receive.hpp"
-#include "async/sender.hpp"
+#include "async/future.hpp"
 #include "tmp/type_list.hpp"
 
 TEST_CASE("JustValue")
 {
-    SECTION("Should fullfill the sender concept")
-    {
-        auto sender = async::justValue();
-
-        STATIC_REQUIRE(async::Sender<decltype(sender)>);
-    }
-
-    SECTION("Should be constructible from void")
+    SECTION("Should correctly pass a void argument by value")
     {
         bool wasCalled = false;
         auto op = async::connect(
-            async::justValue(),
+            async::just(),
             async::receiveValue(
                 [&wasCalled]() {
                     wasCalled = true;
@@ -25,65 +18,64 @@ TEST_CASE("JustValue")
             ));
         async::start(op);
 
+        STATIC_REQUIRE(async::Future<decltype(async::just()), void, void>);
         REQUIRE(wasCalled);
     }
 
     SECTION("Should correctly pass a single argument by value")
     {
         int result = 0;
+        auto sender = async::just(10);
+        STATIC_REQUIRE(async::Future<decltype(sender), int, void>);
+        
         auto op = async::connect(
-            async::justValue(10),
-            async::receiveValue(
-                [&result](auto val) {
-                    result = val;
-                }
-            ));
+            std::move(sender),
+            async::receiveValue([&result](auto val) { result = val; })
+        );
         async::start(op);
 
         REQUIRE(result == 10);
     }
 
-    SECTION("Should correctly pass a multiple arguments")
+    SECTION("JustError")
     {
-        int intResult = 0;
-        double doubleResult = 0;
-        bool boolResult = false;
-
+        int result = 0;
+        auto sender = async::justError(10);
+        STATIC_REQUIRE(async::Future<decltype(sender), void, int>);
+        
         auto op = async::connect(
-            async::justValue(10, 20., true),
-            async::receiveValue(
-                [&](int i, double d, bool b) {
-                    intResult = i;
-                    doubleResult = d;
-                    boolResult = b;
-                }
-            ));
+            std::move(sender),
+            async::receiveError([&result](auto val) { result = val; })
+        );
         async::start(op);
 
-        REQUIRE(intResult == 10);
-        REQUIRE(doubleResult == 20.);
-        REQUIRE(boolResult == true);
+        REQUIRE(result == 10);
+    }
+
+    SECTION("JustDone")
+    {
+        bool wasDone = false;
+        auto sender = async::justDone();
+        
+        auto op = async::connect(
+            std::move(sender),
+            async::receiveDone([&wasDone]() { wasDone = true; })
+        );
+        async::start(op);
+
+        STATIC_REQUIRE(async::Future<decltype(sender), void, void>);
+        REQUIRE(wasDone);
     }
 
     SECTION("Should accept lvalue argument")
     {
         int input = 10, result = 0;
         auto op = async::connect(
-            async::justValue(input),
-            async::receiveValue(
-                [&result](auto val) {
-                    result = val;
-                }
-            ));
+            async::just(input),
+            async::receiveValue([&result](auto val) { result = val;})
+        );
         async::start(op);
 
         REQUIRE(result == input);
-    }
-
-    SECTION("Should provide a value_type typedef")
-    {
-        auto j = async::justValue(int(10), true, 'c');
-        using ValueTypes = async::SenderValueTypes<decltype(j), tmp::TypeList, tmp::TypeList>;
-        STATIC_REQUIRE(std::is_same_v<ValueTypes, tmp::TypeList<tmp::TypeList<int, bool, char>>>);
     }
 }

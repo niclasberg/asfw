@@ -25,12 +25,18 @@ TEST_CASE("I2S")
     using namespace drivers;
     auto mockSpi = MockSpi{};
     resetPeripheral(mockSpi);
-    auto mockBoard = makeMockBoard(is2ClockFrequency<48'000'000>, mockPeripherals<MockPeripherals>);
+    MockBoard<MockPeripherals, MockClockConfig { .i2sClockFrequency = 48'000'000 }> mockBoard;
 
     SECTION("Master init default options")
     {
-        i2s::makeI2sMaster(mockBoard, deviceId<0>, i2s::sampleFreq<48000>, 
-            i2s::masterClockPin<0, 0>, i2s::serialDataPin<0, 0>, i2s::serialClockPin<0, 0>, i2s::wordSelectPin<0, 0>);
+        i2s::makeI2sMaster<i2s::MasterConfig {
+            .id = 0,
+            .serialDataPin = Pin(0, 0),
+            .serialClockPin = Pin(0, 0),
+            .wordSelectPin = Pin(0, 0),
+            .masterClockPin = Pin(0, 0),
+            .sampleRate = 48'000
+        }>(mockBoard);
         REQUIRE(reg::read(mockSpi, board::spi::I2SCFGR::I2SE) == 1);
         REQUIRE(reg::read(mockSpi, board::spi::I2SCFGR::CHLEN) == 0);
         REQUIRE(reg::read(mockSpi, board::spi::I2SCFGR::CKPOL) == 0);
@@ -44,14 +50,19 @@ TEST_CASE("I2S")
 
     SECTION("Master init non-default options")
     {
-        i2s::makeI2sMaster(mockBoard, deviceId<0>, 
-            i2s::sampleFreq<48000>,
-            i2s::BitDepth::BITS32, 
-            i2s::DataFrameFormat::BITS24,
-            i2s::ClkPolarity::HIGH,
-            i2s::Standard::MSB,
-            i2s::MasterClockOut::ON,
-            i2s::masterClockPin<0, 0>, i2s::serialDataPin<0, 0>, i2s::serialClockPin<0, 0>, i2s::wordSelectPin<0, 0>);
+        i2s::makeI2sMaster<i2s::MasterConfig {
+            .id = 0,
+            .serialDataPin = Pin(0, 0),
+            .serialClockPin = Pin(0, 0),
+            .wordSelectPin = Pin(0, 0),
+            .masterClockPin = Pin(0, 0),
+            .sampleRate = 48000,
+            .standard = i2s::Standard::MSB,
+            .masterClockOut = true,
+            .dataFrameFormat = i2s::DataFrameFormat::BITS24,
+            .bitDepth = i2s::BitDepth::BITS32, 
+            .clockPolarity = i2s::ClockPolarity::HIGH,
+        }>(mockBoard);
 
         REQUIRE(reg::read(mockSpi, board::spi::I2SCFGR::I2SE) == 1);
         REQUIRE(reg::read(mockSpi, board::spi::I2SCFGR::CHLEN) == 1);

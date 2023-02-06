@@ -1,5 +1,6 @@
 #pragma once
 #include <type_traits>
+#include "tmp/traits.hpp"
 
 namespace async
 {
@@ -27,17 +28,15 @@ namespace async
         {
             F f;
 
-            template<class ... Values>
-            void setValue(Values && ... values) &&
+            template<class T>
+            void setValue(T && value) &&
             {
-                if constexpr (sizeof...(Values) > 0)
-                {
-                    std::move(f)(static_cast<Values&&>(values)...);
-                }
-                else
-                {
-                    std::move(f)();
-                }
+                std::move(f)(static_cast<T&&>(value));
+            }
+
+            void setValue(tmp::Void &&) &&
+            {
+                std::move(f)();
             }
 
             template<class T> void setSignal(T &&) { }

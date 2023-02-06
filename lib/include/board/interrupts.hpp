@@ -14,12 +14,12 @@ namespace board
     {
         static void enableIRQs()
         {
-            asm volatile ("cpsie i" : : : "memory");
+            //asm volatile ("cpsie i" : : : "memory");
         }
 
         static void disableIRQs()
         {
-            asm volatile ("cpsid i" : : : "memory");
+            //asm volatile ("cpsid i" : : : "memory");
         }
     };
 

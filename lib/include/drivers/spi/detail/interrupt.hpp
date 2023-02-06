@@ -4,7 +4,7 @@
 namespace drivers::spi::detail
 {
     template<std::uint8_t deviceId>    
-    constexpr auto getInterrupt(DeviceId<deviceId>)
+    constexpr auto getInterrupt()
     {
         static_assert(deviceId < 3, "Device id out of range");
         if constexpr(deviceId == 0)

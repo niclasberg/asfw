@@ -78,12 +78,13 @@ namespace board::clock
             static void apply(Rcc & rccDev)
             {
                 // Enable the input clock generator
-                if(pllSource == PllSrcVal::HSE && !reg::bitIsSet(rccDev, rcc::CR::HSEON))
+                if (pllSource == PllSrcVal::HSE && !reg::bitIsSet(rccDev, rcc::CR::HSEON))
                 {
                     reg::set(rccDev, rcc::CR::HSEON);
                     while (!reg::bitIsSet(rccDev, rcc::CR::HSERDY)) { }
                 }
-                if(pllSource == PllSrcVal::HSI && !reg::bitIsSet(rccDev, rcc::CR::HSION))
+                
+                if (pllSource == PllSrcVal::HSI && !reg::bitIsSet(rccDev, rcc::CR::HSION))
                 {
                     reg::set(rccDev, rcc::CR::HSION);
                     while (!reg::bitIsSet(rccDev, rcc::CR::HSIRDY)) { }

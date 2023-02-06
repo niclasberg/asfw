@@ -10,7 +10,7 @@ namespace async
         template<Sender S, class R, TimedScheduler Sched>
         class DelayOperation
         {
-            using InnerOperation = ConnectResultType<S, R>;
+            using InnerOperation = connect_result_t<S, R>;
 
         public:
             template<class S2, class R2>
@@ -43,22 +43,16 @@ namespace async
         };
 
         template<class S>
-        class DelaySender
+        class DelayFuture
         {
         public:
-            template<template<typename...> class Variant, template<typename...> class Tuple>
-            using value_types = SenderValueTypes<S, Variant, Tuple>;
-
-            template<template<typename...> class Variant>
-            using signal_types = SenderSignalTypes<S, Variant>;
-
-            template<template<typename...> class Variant>
-            using error_types = SenderErrorTypes<S, Variant>;
+            using value_type = future_value_t<S>;
+            using error_type = future_error_t<S>;
 
             template<class S2>
-            DelaySender(int waitPeriodInMiliseconds, S2 && sender)
-            : waitPeriodInMiliseconds_(waitPeriodInMiliseconds)
-            , sender_(static_cast<S2&&>(sender))
+            DelayFuture(int waitPeriodInMiliseconds, S2 && sender)
+                : waitPeriodInMiliseconds_(waitPeriodInMiliseconds)
+                , sender_(static_cast<S2&&>(sender))
             {
 
             }
@@ -85,8 +79,9 @@ namespace async
 
     inline constexpr struct delay_t final
     {
-        template<Sender S>
-        auto operator()(S && sender, int waitPeriod) const -> detail::DelaySender<std::remove_cvref_t<S>>
+        template<AnyFuture S>
+        auto operator()(S && sender, int waitPeriod) const 
+            -> detail::DelayFuture<std::remove_cvref_t<S>>
         {
             return {waitPeriod, static_cast<S&&>(sender)};
         }

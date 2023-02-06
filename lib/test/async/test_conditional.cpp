@@ -29,7 +29,6 @@ namespace
     };
 }
 
-
 TEST_CASE("Conditional")
 {
     SECTION("Should provide a value_types typedef")

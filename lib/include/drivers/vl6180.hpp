@@ -12,11 +12,10 @@
 #include "vl6180/regmap.hpp"
 
 #include "async/sequence.hpp"
-#include "async/then.hpp"
+#include "async/and_then.hpp"
 #include "async/conditional.hpp"
 #include "async/repeat.hpp"
 #include "async/just.hpp"
-#include "async/signal.hpp"
 
 namespace drivers
 {
@@ -58,23 +57,23 @@ namespace drivers
         Vl6180(const Vl6180 &) = delete;
         Vl6180 & operator=(const Vl6180 &) = delete;
 
-        auto init()
+        async::Future<void, i2c::I2cError> auto init()
         {
             using namespace vl6180::regmap;
 
             return 
                 reg::bitIsSet(device_, FRESH_OUT_OF_RESET::FRESH_OUT_OF_RESET)
-                | async::then([this](bool isFreshOutOfReset) {
+                | async::andThen([this](bool isFreshOutOfReset) {
                     return async::conditional(isFreshOutOfReset, setupRegisterDefaults(), async::justValue());
                 })
-                | async::then([this]() {
+                | async::andThen([this]() {
                     return reg::apply(device_,
                             reg::set(INTERRUPT_CLEAR::RANGE_INTERRUPT),
                             reg::set(INTERRUPT_CLEAR::ERROR_INTERRUPT));
                 });
         }
 
-        async::Sender auto getDeviceIdentification()
+        async::Future<vl6180::DeviceIdentification, i2c::I2cError> auto getDeviceIdentification()
         {
             using namespace vl6180::regmap;
             return async::useState(
@@ -108,7 +107,7 @@ namespace drivers
                 });
         }
 
-        async::Sender auto readRange()
+        async::Future<std::uint8_t, i2c::I2cError> auto readRange()
         {
             using namespace vl6180::regmap;
             return async::sequence(
@@ -130,7 +129,8 @@ namespace drivers
                 }));
         }
 
-        async::Sender auto readRangeContinuous()
+        template<std::invocable<std::uint8_t> F>
+        async::Future<void, i2c::I2cError> auto readRangeContinuous(F && f)
         {
             using namespace vl6180::regmap;
             return async::sequence(
@@ -142,10 +142,9 @@ namespace drivers
                     async::sequence(
                         waitForSampleReady(),
                         
-                        reg::uncheckedRead(device_, RANGE_VAL::_Offset{})
-                        | async::signalOnValue([](std::uint8_t rangeValue) {
-                            return rangeValue;
-                        }),
+                        async::map(
+                            reg::uncheckedRead(device_, RANGE_VAL::_Offset{}),
+                            static_cast<F&&>(f)),
                         
                         clearInterruptFlags()
                     )

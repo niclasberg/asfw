@@ -34,12 +34,14 @@ TEST_CASE("Dma")
 {
     MockDma mockDma;
     resetPeripheral(mockDma);
-    auto mockBoard = makeMockBoard(mockPeripherals<Peripherals>);
+    MockBoard<Peripherals> mockBoard;
 
     using namespace drivers;
     SECTION("Init defaults")
     {
-        dma::makeStream(mockBoard, dma::streamId<0,1>);
+        dma::makeStream<dma::DmaConfig {
+            .id = dma::DmaId(0, 1)
+        }>(mockBoard);
 
         REQUIRE(reg::read(MockDma{}, board::dma::CR::CHSEL[1_c]) == 0);
         REQUIRE(reg::read(MockDma{}, board::dma::CR::PL[1_c]) == 0);
@@ -51,19 +53,28 @@ TEST_CASE("Dma")
 
     SECTION("Init with 8 bit data size")
     {
-        dma::makeStream(mockBoard, dma::streamId<0,3>, dma::DataSize::BITS8);
+        dma::makeStream<dma::DmaConfig {
+            .id = dma::DmaId(0, 3),
+            .dataSize = dma::DataSize::BYTE
+        }>(mockBoard);
         REQUIRE(reg::read(MockDma{}, board::dma::CR::PSIZE[3_c]) == 0);
     }
 
     SECTION("Init with 16 bit data size")
     {
-        dma::makeStream(mockBoard, dma::streamId<0, 4>, dma::DataSize::BITS16);
+        dma::makeStream<dma::DmaConfig {
+            .id = dma::DmaId(0, 4),
+            .dataSize = dma::DataSize::HALF_WORD
+        }>(mockBoard);
         REQUIRE(reg::read(MockDma{}, board::dma::CR::PSIZE[4_c]) == 1);
     }
 
     SECTION("Init with 32 bit data size")
     {
-        dma::makeStream(mockBoard, dma::streamId<0, 5>, dma::DataSize::BITS32);
+        dma::makeStream<dma::DmaConfig {
+            .id = dma::DmaId(0, 5),
+            .dataSize = dma::DataSize::WORD
+        }>(mockBoard);
         REQUIRE(reg::read(MockDma{}, board::dma::CR::PSIZE[5_c]) == 2);
     }
 
@@ -90,10 +101,12 @@ TEST_CASE("Dma")
 
     SECTION("Init with non-default options")
     {
-        dma::makeStream(mockBoard, dma::streamId<0, 7>, 
-            dma::Channel::CHANNEL3, 
-            dma::Priority::MEDIUM,
-            dma::DataSize::BITS32);
+        dma::makeStream<dma::DmaConfig {
+            .id = dma::DmaId(0, 7),
+            .channel = dma::Channel::CHANNEL3,
+            .dataSize = dma::DataSize::WORD,
+            .priority = dma::Priority::MEDIUM
+        }>(mockBoard);
 
         REQUIRE(reg::read(MockDma{}, board::dma::CR::CHSEL[7_c]) == 3);
         REQUIRE(reg::read(MockDma{}, board::dma::CR::PL[7_c]) == 1);
@@ -107,7 +120,9 @@ TEST_CASE("Dma")
         const std::uint16_t size = 55;
 
         dma::DmaSignal signal = dma::DmaSignal::TRANSFER_HALF_COMPLETE;
-        auto dmaDev = dma::makeStream(mockBoard, dma::streamId<0,0>);
+        auto dmaDev = dma::makeStream<dma::DmaConfig {
+            .id = dma::DmaId(0, 0)
+        }>(mockBoard);
 
         auto op = dmaDev.transferSingle(dma::MemoryAddress{srcAddress}, dma::PeripheralAddress{dstAddress}, size)
             ([&](dma::DmaSignal s) {

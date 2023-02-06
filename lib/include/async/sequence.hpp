@@ -1,14 +1,12 @@
 #pragma once
-#include <algorithm>
 #include <tuple>
-#include "sender.hpp"
+#include "future.hpp"
 #include "cont/box_union.hpp"
 #include "receiver.hpp"
 #include "tmp/parameter_packs.hpp"
 #include "tmp/type_list.hpp"
 #include "tmp/tag_invoke.hpp"
 #include "util.hpp"
-#include <utility>
 
 namespace async
 {
@@ -20,28 +18,24 @@ namespace async
         public:
             SequenceReceiver(Operation & op) : op_(op) { }
 
-            template<class ... Values>
-            void setValue(Values && ... values) &&
+            template<class T>
+            void setValue(T && value) &&
             {
-                if constexpr (I == (NSteps-1))
+                if constexpr (I < (NSteps-1))
                 {
-                    // Need to grab a copy of the reference, the instance of this class
-                    // will be destroyed when completeStep<NSteps-1> is called
-                    Operation & op = op_;
-                    op_.template completeStep<I>();
-                    async::setValue(std::move(op.getReceiver()), static_cast<Values&&>(values)...);
-                }
-                else
-                {
+                    // Intermediate step, ignore the value and just move forward to the next
                     op_.template completeStep<I>();
                     op_.template startStep<I+1>();
                 }
-            }
-
-            template<class S>
-            void setSignal(S && signal)
-            {
-                async::setSignal(op_.getReceiver(), static_cast<S&&>(signal));
+                else
+                {
+                    // Last step, propagate the received value onto the next receiver
+                    // We need to grab a copy of the reference, the instance of this class
+                    // will be destroyed when completeStep<NSteps-1> is called
+                    Operation & op = op_;
+                    op_.template completeStep<I>();
+                    async::setValue(std::move(op.getReceiver()), static_cast<T&&>(value));
+                }
             }
 
             template<class E>
@@ -74,16 +68,23 @@ namespace async
             requires (sizeof...(Senders) > 0)
         class SequenceOperation
         {
+            using Self = SequenceOperation<R, Senders...>;
+
             template<std::size_t I>
-            using NthReceiverType = SequenceReceiver<SequenceOperation<R, Senders...>, I, sizeof...(Senders)>;
+            using NthReceiverType = SequenceReceiver<Self, I, sizeof...(Senders)>;
 
             template<class Op, std::size_t I, std::size_t J> friend class SequenceReceiver;
 
             template<std::size_t I>
-            using NthOperationType = ConnectResultType<
+            using NthOperationType = connect_result_t<
                 std::tuple_element_t<I, std::tuple<Senders...>>, 
                 NthReceiverType<I>>;
 
+            /**
+             * @brief Start the Ith sub-operation
+             * 
+             * @tparam I Operation index
+             */
             template<std::size_t I>
             void startStep()
             {
@@ -118,10 +119,9 @@ namespace async
             {
             }
 
-            ~SequenceOperation() { }
-            
             SequenceOperation(const SequenceOperation &) = delete;
             SequenceOperation & operator=(const SequenceOperation &) = delete;
+            ~SequenceOperation() { }
 
             void start()
             {
@@ -145,18 +145,13 @@ namespace async
         };
 
         template<class ... Senders>
-        struct SequenceSender 
+            requires HasCombinableErrors<Senders...> && (sizeof...(Senders) > 0)
+        class SequenceSender 
         {
-            template<
-                template<typename ...> typename Variant, 
-                template<typename ...> typename Tuple>
-            using value_types = typename tmp::LastType<Senders...>::template value_types<Variant, Tuple>;
-
-            template<template<typename ...> typename Variant>
-            using error_types = CombinedSenderErrorTypes<Variant, Senders...>;
-
-            template<template<typename...> typename Variant>
-            using signal_types = CombinedSenderSignalTypes<Variant, Senders...>;
+            using Self = SequenceSender<Senders...>;
+        public:
+            using value_type = future_value_t<tmp::LastType<Senders...>>;
+            using error_type = combined_future_error_t<Senders...>;
 
             template<class ... Senders2>
             SequenceSender(Senders2 && ... senders)
@@ -165,31 +160,32 @@ namespace async
 
             }
 
-            template<class R>
-            auto connect(R && receiver) &&
+        private:
+            template<class S, class R>
+                requires std::same_as<std::remove_cvref_t<S>, Self>
+            friend auto tag_invoke(connect_t, S && sender, R && receiver)
                 -> SequenceOperation<std::remove_cvref_t<R>, Senders...>
             {
-                return {static_cast<R&&>(receiver), std::move(senders_)};
-            }
-
-            template<class R>
-            auto connect(R && receiver) const &
-                -> SequenceOperation<std::remove_cvref_t<R>, Senders...>
-            {
-                return {static_cast<R&&>(receiver), senders_};
+                return { static_cast<R&&>(receiver), static_cast<S&&>(sender).senders_ };
             }
 
             [[no_unique_address]] std::tuple<Senders...> senders_;
         };
     }
 
+    /**
+     * @brief Executes the senders in sequence discarding their values, finally emitting the value
+     * produced by the last sender. This combinator short circuits, if any of the 
+     * senders in the sequence emits an error or a done signal, the following senders
+     * will not be executed.
+     */
     inline constexpr struct sequence_t
     {
-        template<Sender ... Senders>
-        auto operator()(Senders &&... senders) const
-            -> detail::SequenceSender<std::remove_cvref_t<Senders>...>
+        template<AnyFuture ... Futures>
+        auto operator()(Futures &&... futures) const
+            -> detail::SequenceSender<std::remove_cvref_t<Futures>...>
         {
-            return { static_cast<Senders&&>(senders)... };
+            return { static_cast<Futures&&>(futures)... };
         }
     } sequence{};
 }

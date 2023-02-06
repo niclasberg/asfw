@@ -1,129 +1,100 @@
 #pragma once
-#include "detail/init.hpp"
 #include "peripheral_types.hpp"
+#include "board/interrupts.hpp"
 #include "spi.hpp"
 #include "detail/interrupt.hpp"
-#include <boost/hana/string.hpp>
-#include "opt/option.hpp"
+
+#include "types.hpp"
+#include "detail/bus_config.hpp"
+#include "board/regmap/spi.hpp"
+#include "reg/peripheral_operations.hpp"
+#include "reg/apply.hpp"
+#include "reg/write.hpp"
 
 namespace drivers::spi
 {
-    namespace detail
+    enum class DeviceMode
     {
-        MAKE_OPTION_KEY(IS_MASTER);
-        MAKE_OPTION_KEY(BUS_CONFIG);
-        MAKE_OPTION_KEY(CLK_POL);
-        MAKE_OPTION_KEY(DFF);
-        MAKE_OPTION_KEY(CLK_PHASE);
-        MAKE_OPTION_KEY(LSB_FIRST);
-        MAKE_OPTION_KEY(BR_DIVIDER);
-        MAKE_OPTION_KEY(MOSI_PIN);
-        MAKE_OPTION_KEY(MISO_PIN);
-    }
+        MASTER,
+        SLAVE
+    };
 
-    /**
-     * Data pin: input for master, output for slave
-     */
-    template<std::uint8_t port, std::uint8_t pin>
-    constexpr auto MISO_PIN = opt::makeOption(detail::MISO_PIN, PIN<port, pin>);
-
-    /**
-     * Data pin: output for master, input for slave
-     */
-    template<std::uint8_t port, std::uint8_t pin>
-    constexpr auto MOSI_PIN = opt::makeOption(detail::MOSI_PIN, PIN<port, pin>);
-
-    namespace DeviceMode
+    enum class BitOrder
     {
-        constexpr auto MASTER = opt::makeOption(detail::IS_MASTER, true_c);
-        constexpr auto SLAVE  = opt::makeOption(detail::IS_MASTER, false_c);
-    }
+        LSB_FIRST,
+        MSB_FIRST
+    };
 
-    namespace BitOrder
+    using DataFrameFormat = board::spi::CR1::DffVal;
+
+    // Bus config
+    using BusConfig = detail::BusConfig;
+
+    // Clock polarity
+    using ClockPolarity = board::spi::CR1::CpolVal;
+
+    // Clock phase
+    using ClockPhase = board::spi::CR1::CphaVal;
+
+    // The factor that the peripheral clock should be divided by to obtain the SPI baud rate
+    using BaudRateDivider = board::spi::CR1::BrVal;
+
+    struct SpiConfig
     {
-        constexpr auto LSB_FIRST = opt::makeOption(detail::LSB_FIRST, true_c);
-        constexpr auto MSB_FIRST = opt::makeOption(detail::LSB_FIRST, false_c);
-    }
+        std::uint8_t deviceId;
+        /* Data pin: output for master, input for slave*/
+        Pin mosiPin;
+        /* Data pin: input for master, output for slave */
+        Pin misoPin;
+        DeviceMode deviceMode = DeviceMode::MASTER;
+        BusConfig busConfig = BusConfig::FULL_DUPLEX;
+        BitOrder bitOrder = BitOrder::LSB_FIRST;
+        DataFrameFormat dataFrameFormat = DataFrameFormat::BYTE;
+        BaudRateDivider baudRateDivider = BaudRateDivider::PCKL_DIV2;
+        ClockPhase clockPhase = ClockPhase::LOW;
+        ClockPolarity clockPolarity = ClockPolarity::LOW;
+    };
 
-    namespace FrameFormat
+    template<SpiConfig config>
+    struct makeSpi_t final
     {
-        constexpr auto BYTE      = opt::makeOption(detail::DFF, constant_c<detail::DffVal::BYTE>);
-        constexpr auto HALF_WORD = opt::makeOption(detail::DFF, constant_c<detail::DffVal::HALF_WORD>);
-    }
+        template<class Board>
+        constexpr auto operator()(Board boardDescriptor) const
+        {
+            using DataType = std::conditional_t<
+                config.dataFrameFormat == DataFrameFormat::BYTE,
+                std::uint8_t,
+                std::uint16_t>;
 
-    namespace BusConfig
-    {
-        constexpr auto FULL_DUPLEX = opt::makeOption(detail::BUS_CONFIG, constant_c<detail::BusConfig::FullDuplex>);
-        constexpr auto HALF_DUPLEX = opt::makeOption(detail::BUS_CONFIG, constant_c<detail::BusConfig::HalfDuplex>);
-        constexpr auto READ_ONLY   = opt::makeOption(detail::BUS_CONFIG, constant_c<detail::BusConfig::RxOnly>);
-        constexpr auto WRITE_ONLY  = opt::makeOption(detail::BUS_CONFIG, constant_c<detail::BusConfig::RxOnly>);
-    }
+            constexpr auto spiX = boardDescriptor
+                .getPeripheral(PeripheralTypes::SPI<config.deviceId>); 
 
-    namespace ClockPolarity 
-    {
-        constexpr auto LOW  = opt::makeOption(detail::CLK_POL, constant_c<detail::CpolVal::LOW>);
-        constexpr auto HIGH = opt::makeOption(detail::CLK_POL, constant_c<detail::CpolVal::HIGH>);
-    }
+            spiX.enable();
 
-    namespace ClockPhase
-    {
-        constexpr auto LOW  = opt::makeOption(detail::CLK_PHASE, constant_c<detail::CphaVal::LOW>);
-        constexpr auto HIGH = opt::makeOption(detail::CLK_PHASE, constant_c<detail::CphaVal::HIGH>);
-    }
+            reg::apply(spiX,
+                reg::write(board::spi::CR1::BR, constant_c<config.baudRateDivider>),
+                reg::write(board::spi::CR1::CPOL, constant_c<config.clockPolarity>),
+                reg::write(board::spi::CR1::CPHA, constant_c<config.clockPhase>),
+                reg::write(board::spi::CR1::DFF, constant_c<config.dataFrameFormat>),
+                reg::write(board::spi::CR1::LSBFIRST, bool_c<config.bitOrder == BitOrder::LSB_FIRST>),
+                reg::write(board::spi::CR1::MSTR, bool_c<config.deviceMode == DeviceMode::MASTER>));
 
-    namespace BaudRateDivider
-    {
-        constexpr auto DIV_2   = opt::makeOption(detail::BR_DIVIDER, constant_c<detail::BrVal::PCKL_DIV2>);
-        constexpr auto DIV_4   = opt::makeOption(detail::BR_DIVIDER, constant_c<detail::BrVal::PCKL_DIV4>);
-        constexpr auto DIV_8   = opt::makeOption(detail::BR_DIVIDER, constant_c<detail::BrVal::PCKL_DIV8>);
-        constexpr auto DIV_16  = opt::makeOption(detail::BR_DIVIDER, constant_c<detail::BrVal::PCKL_DIV16>);
-        constexpr auto DIV_32  = opt::makeOption(detail::BR_DIVIDER, constant_c<detail::BrVal::PCKL_DIV32>);
-        constexpr auto DIV_64  = opt::makeOption(detail::BR_DIVIDER, constant_c<detail::BrVal::PCKL_DIV64>);
-        constexpr auto DIV_128 = opt::makeOption(detail::BR_DIVIDER, constant_c<detail::BrVal::PCKL_DIV128>);
-        constexpr auto DIV_256 = opt::makeOption(detail::BR_DIVIDER, constant_c<detail::BrVal::PCKL_DIV256>);
-    }
+            // Figure out NSS pin handling and put here
+            if constexpr (config.busConfig == BusConfig::FULL_DUPLEX)
+            {
+                
+            }
 
-    template<class Board, std::uint8_t id, class ... Options>
-    auto makeSpi(Board board, DeviceId<id> deviceId, Options && ... opts)
-    {
-        constexpr auto spiX = board.getPeripheral(PeripheralTypes::SPI<id>); 
+            reg::write(spiX, board::spi::CR1::SPE, true_c);
 
-        auto options = opt::makeOptionSet(
-            opt::fields(
-                detail::CLK_POL, 
-                detail::CLK_PHASE, 
-                detail::LSB_FIRST,
-                detail::BR_DIVIDER,
-                detail::DFF,
-                detail::BUS_CONFIG,
-                detail::IS_MASTER,
-                detail::MISO_PIN,
-                detail::MOSI_PIN),
-            std::forward<Options>(opts)...);
+            auto interrupt = detail::getInterrupt<config.deviceId>();
+            boardDescriptor.enableIRQ(interrupt);
 
-        auto dataFrameFormat = opt::getOrDefault(options, detail::DFF, FrameFormat::BYTE);
-        auto busConfig = opt::getOrDefault(options, detail::BUS_CONFIG, BusConfig::FULL_DUPLEX);
+            return Spi<decltype(spiX), DataType, config.busConfig>{
+                boardDescriptor.getInterruptEvent(interrupt) };
+        }
+    };
 
-        detail::initSpi(
-            spiX, 
-            opt::getOrDefault(options, detail::CLK_POL, ClockPolarity::LOW), 
-            opt::getOrDefault(options, detail::CLK_PHASE, ClockPhase::LOW),
-            opt::getOrDefault(options, detail::BR_DIVIDER, BaudRateDivider::DIV_2),
-            dataFrameFormat, 
-            busConfig,
-            opt::getOrDefault(options, detail::IS_MASTER, DeviceMode::MASTER),
-            opt::getOrDefault(options, detail::LSB_FIRST, false_c));
-
-        using DataType = std::conditional_t<
-            hana::value(dataFrameFormat) == detail::DffVal::BYTE,
-            std::uint8_t,
-            std::uint16_t>;
-        using SpiX = decltype(spiX);
-
-        auto interrupt = detail::getInterrupt(deviceId);
-		board.enableIRQ(interrupt);
-
-        return Spi<SpiX, DataType, hana::value(busConfig)>{
-            board.getInterruptEvent(interrupt) };
-    }
+    template<SpiConfig config>
+    inline constexpr makeSpi_t<config> makeSpi {};
 }

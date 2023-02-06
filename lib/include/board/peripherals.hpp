@@ -41,60 +41,60 @@ namespace board
 	}
 
 	// Peripherals hanging on AHB1 bus
-    using GpioA = Peripheral<
+    struct GpioA : Peripheral<
             gpio::tag,
             DeviceMemory<std::uint32_t, 0x40020000, 0x400203FF>,
             detail::PeriphCtrl<
 				decltype(rcc::AHB1ENR::GPIOAEN),
-				decltype(rcc::AHB1RSTR::GPIOARST)>>;
-    using GpioB = Peripheral<
+				decltype(rcc::AHB1RSTR::GPIOARST)>> {};
+    struct GpioB : Peripheral<
             gpio::tag,
             DeviceMemory<std::uint32_t, 0x40020400, 0x400207FF>,
             detail::PeriphCtrl<
 				decltype(rcc::AHB1ENR::GPIOBEN),
-				decltype(rcc::AHB1RSTR::GPIOBRST)>>;
-    using GpioC = Peripheral<
+				decltype(rcc::AHB1RSTR::GPIOBRST)>> {};
+    struct GpioC : Peripheral<
             gpio::tag,
             DeviceMemory<std::uint32_t, 0x40020800, 0x40020BFF>,
             detail::PeriphCtrl<
 				decltype(rcc::AHB1ENR::GPIOCEN),
-				decltype(rcc::AHB1RSTR::GPIOCRST)>>;
-    using GpioD = Peripheral<
+				decltype(rcc::AHB1RSTR::GPIOCRST)>> {};
+    struct GpioD : Peripheral<
             gpio::tag,
             DeviceMemory<std::uint32_t, 0x40020C00, 0x40020FFF>,
             detail::PeriphCtrl<
 				decltype(rcc::AHB1ENR::GPIODEN),
-				decltype(rcc::AHB1RSTR::GPIODRST)>>;
-    using GpioE = Peripheral<
+				decltype(rcc::AHB1RSTR::GPIODRST)>> {};
+    struct GpioE : Peripheral<
             gpio::tag,
             DeviceMemory<std::uint32_t, 0x40021000, 0x400213FF>,
             detail::PeriphCtrl<
 				decltype(rcc::AHB1ENR::GPIOEEN),
-				decltype(rcc::AHB1RSTR::GPIOERST)>>;
-    using GpioF = Peripheral<
+				decltype(rcc::AHB1RSTR::GPIOERST)>> {};
+    struct GpioF : Peripheral<
             gpio::tag,
             DeviceMemory<std::uint32_t, 0x40021400, 0x400217FF>,
             detail::PeriphCtrl<
 				decltype(rcc::AHB1ENR::GPIOFEN),
-				decltype(rcc::AHB1RSTR::GPIOFRST)>>;
-    using GpioG = Peripheral<
+				decltype(rcc::AHB1RSTR::GPIOFRST)>> {};
+    struct GpioG : Peripheral<
             gpio::tag,
             DeviceMemory<std::uint32_t, 0x40021800, 0x40021BFF>,
             detail::PeriphCtrl<
 				decltype(rcc::AHB1ENR::GPIOGEN),
-				decltype(rcc::AHB1RSTR::GPIOGRST)>>;
-    using GpioH = Peripheral<
+				decltype(rcc::AHB1RSTR::GPIOGRST)>> {};
+    struct GpioH : Peripheral<
             gpio::tag,
             DeviceMemory<std::uint32_t, 0x40021C00, 0x40021FFF>,
             detail::PeriphCtrl<
 				decltype(rcc::AHB1ENR::GPIOHEN),
-				decltype(rcc::AHB1RSTR::GPIOHRST)>>;
-    using GpioI = Peripheral<
+				decltype(rcc::AHB1RSTR::GPIOHRST)>> {};
+    struct GpioI : Peripheral<
             gpio::tag,
             DeviceMemory<std::uint32_t, 0x40022000, 0x400223FF>,
             detail::PeriphCtrl<
 				decltype(rcc::AHB1ENR::GPIOIEN),
-				decltype(rcc::AHB1RSTR::GPIOIRST)>>;
+				decltype(rcc::AHB1RSTR::GPIOIRST)>> {};
 
 	using Dma1 = Peripheral<
 			dma::tag,
@@ -110,29 +110,29 @@ namespace board
 				decltype(rcc::AHB1RSTR::DMA2RST)>>;
 
 	// Peripherals hanging on the APB1 bus
-	using Spi2 = Peripheral<
+	struct Spi2 : Peripheral<
             spi::tag,
 			DeviceMemory<uint32_t, 0x40003800, 0x40003BFF>,
 			detail::PeriphCtrl<
 				decltype(rcc::APB1ENR::SPI2EN),
-				decltype(rcc::APB1RSTR::SPI2RST)>>;
-	using Spi3 = Peripheral<
+				decltype(rcc::APB1RSTR::SPI2RST)>> {};
+	struct Spi3 : Peripheral<
             spi::tag,
 			DeviceMemory<uint32_t, 0x40003C00, 0x40003FFF>,
 			detail::PeriphCtrl<
 				decltype(rcc::APB1ENR::SPI3EN),
-				decltype(rcc::APB1RSTR::SPI3RST)>>;
+				decltype(rcc::APB1RSTR::SPI3RST)>> {};
 
-	using Uart4 = Peripheral<uart::tag, 
+	struct Uart4 : Peripheral<uart::tag, 
 			DeviceMemory<uint32_t, 0x40004C00, 0x40004FFF>,
 			detail::PeriphCtrl<
 				decltype(rcc::APB1ENR::UART4EN),
-				decltype(rcc::APB1RSTR::UART4RST)>>;
-	using Uart5 = Peripheral<uart::tag, 
+				decltype(rcc::APB1RSTR::UART4RST)>> {};
+	struct Uart5 = Peripheral<uart::tag, 
 			DeviceMemory<uint32_t, 0x40005000, 0x400053FF>,
 			detail::PeriphCtrl<
 				decltype(rcc::APB1ENR::UART5EN),
-				decltype(rcc::APB1RSTR::UART5RST)>>;
+				decltype(rcc::APB1RSTR::UART5RST)>> {};
 	
 	struct I2C1 : Peripheral<i2c::tag,
 			DeviceMemory<uint32_t, 0x40005400, 0x400057FF>,

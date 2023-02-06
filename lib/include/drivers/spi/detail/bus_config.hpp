@@ -4,9 +4,9 @@ namespace drivers::spi::detail
 {
     enum class BusConfig 
     {
-        FullDuplex,
-        HalfDuplex,
-        RxOnly,
-        TxOnly
+        FULL_DUPLEX,
+        HALF_DUPLEX,
+        READ_ONLY,
+        WRITE_ONLY
     };
 }

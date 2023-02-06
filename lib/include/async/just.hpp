@@ -1,4 +1,5 @@
 #pragma once
+#include "future.hpp"
 #include "async/receiver.hpp"
 #include <type_traits>
 
@@ -6,98 +7,74 @@ namespace async
 {
     namespace detail
     {
-        template<class ... Ts>
+        template<class T>
         struct JustValueSender
         {
-            template<
-                template<typename...> typename Variant,
-                template<typename...> typename Tuple>
-            using value_types = Variant<Tuple<Ts...>>;
-            
-            template<template<typename...> typename Variant> 
-            using signal_types = Variant<>;
-
-            template<template<typename...> typename Variant> 
-            using error_types = Variant<>;
+            using value_type = T;
+            using error_type = void;
 
             template<class Receiver>
             struct Operation
             {
                 Receiver receiver;
-                std::tuple<Ts...> values_;
+                T value_;
 
                 void start()
                 {
-                    std::apply([this](Ts ... values) {
-                        setValue(std::move(receiver), values...);
-                    }, std::move(values_));
+                    setValue(std::move(receiver), std::move(value_));
                 }
             };
 
-            template<ReceiverOf<Ts...> R>
-            Operation<std::decay_t<R>> connect(R && receiver) &&
+            template<Receiver<T, void> R>
+                requires std::move_constructible<T>
+            friend auto tag_invoke(connect_t, JustValueSender<T> && sender, R && receiver)
+             -> Operation<std::decay_t<R>>
             {
-                return {static_cast<R&&>(receiver), std::move(values)};
+                return { static_cast<R&&>(receiver), std::move(sender.value) };
             }
 
-            template<ReceiverOf<Ts...> R>
-            Operation<std::decay_t<R>> connect(R && receiver) const &
+            template<Receiver<T, void> R>
+                requires std::copy_constructible<T>
+            friend auto tag_invoke(connect_t, const JustValueSender<T> & sender, R && receiver)
+             -> Operation<std::decay_t<R>>
             {
-                return {static_cast<R&&>(receiver), values};
+                return { static_cast<R&&>(receiver), sender.value };
             }
 
-            std::tuple<Ts...> values;
+            T value;
         };
 
-        /*template<class ... Ts>
-        struct JustNextSender
+        class EmptyValueSender
         {
-            template<
-                template<typename...> typename Variant,
-                template<typename...> typename Tuple>
-            using next_types = Variant<Tuple<Ts...>>;
+        public:
+            using value_type = void;
+            using error_type = void;
 
-            template<template<typename...> typename Variant> 
-            using error_types = Variant<>;
-
-            template<class Receiver>
+            template<class R>
             struct Operation
             {
-                Receiver receiver;
-                std::tuple<Ts...> ts;
+                R receiver;
 
                 void start()
                 {
-                    std::apply([this](Ts ... values) {
-                        setNext(receiver, static_cast<Ts&&>(values)...);
-                    }, ts);
-                    setDone(std::move(receiver));
+                    setValue(std::move(receiver), tmp::Void{});
                 }
             };
 
-            template<class R>
-                requires ManyReceiverOf<R, Ts...>
-            Operation<std::decay_t<R>> connect(R && receiver) &&
+        private:
+            template<Receiver<void, void> R>
+            friend auto tag_invoke(connect_t, EmptyValueSender, R && receiver)
+             -> Operation<std::decay_t<R>>
             {
-                return {static_cast<R&&>(receiver), std::move(values)};
+                return { static_cast<R&&>(receiver) };
             }
-
-            std::tuple<Ts...> values;
-        };*/
+        };
 
         template<class E>
         struct JustErrorSender
         {
-            template<
-                template<typename...> typename Variant,
-                template<typename...> typename Tuple>
-            using value_types = Variant<Tuple<>>;
-
-            template<template<typename...> typename Variant> 
-            using signal_types = Variant<>;
-            
-            template<template<typename...> typename Tuple> 
-            using error_types = Tuple<E>;
+            using value_type = void;
+            using error_type = E;
 
             template<class Receiver>
             struct Operation
@@ -111,27 +88,29 @@ namespace async
                 }
             };
 
-            template<class R>
-            Operation<std::remove_cvref_t<R>> connect(R && receiver) &&
+            template<Receiver<void, E> R>
+                requires std::move_constructible<E>
+            friend auto tag_invoke(connect_t, JustErrorSender<E> && sender, R && receiver)
+             -> Operation<std::decay_t<R>>
             {
-                return {static_cast<R&&>(receiver), std::move(error_)};
+                return { static_cast<R&&>(receiver), std::move(sender.error) };
             }
 
-            E error_;
+            template<Receiver<void, E> R>
+                requires std::copy_constructible<E>
+            friend auto tag_invoke(connect_t, const JustErrorSender<E> & sender, R && receiver)
+             -> Operation<std::decay_t<R>>
+            {
+                return { static_cast<R&&>(receiver), sender.error };
+            }
+
+            E error;
         };
 
         struct JustDoneSender
         {
-            template<
-                template<typename...> typename Variant,
-                template<typename...> typename Tuple>
-            using value_types = Variant<Tuple<>>;
-            
-            template<template<typename...> typename Variant> 
-            using signal_types = Variant<>;
-
-            template<template<typename...> typename Variant> 
-            using error_types = Variant<>;
+            using value_type = void;
+            using error_type = void;
 
             template<class Receiver>
             struct Operation
@@ -144,10 +123,11 @@ namespace async
                 }
             };
 
-            template<class R>
-            Operation<std::remove_cvref_t<R>> connect(R && receiver) &&
+            template<Receiver<void, void> R>
+            friend auto tag_invoke(connect_t, JustDoneSender, R && receiver)
+             -> Operation<std::decay_t<R>>
             {
-                return {static_cast<R&&>(receiver)};
+                return { static_cast<R&&>(receiver) };
             }
         };
     }
@@ -160,25 +140,21 @@ namespace async
      * @param ts Values to emit
      * @return detail::JustValueSender<std::remove_cvref_t<Ts>...> 
      */
-    template<class ... Ts>
-    constexpr auto justValue(Ts && ... ts) -> detail::JustValueSender<std::remove_cvref_t<Ts>...>
+    template<class T>
+    constexpr auto just(T && t) -> detail::JustValueSender<std::remove_cvref_t<T>>
     {
-        return {static_cast<Ts&&>(ts)...};
+        return { static_cast<T&&>(t) };
     }
 
     /**
-     * Creates a ManySender that, once start, calls setNext on the connected receiver
-     * with the provided values, and then setDone.
+     * @brief Create a sender that, once started, emits a void value
      * 
-     * @tparam Ts 
-     * @param ts 
-     * @return detail::JustNextSender<std::remove_cvref_t<Ts>...> 
+     * @return detail::EmptyValueSender 
      */
-    /*template<class ... Ts>
-    constexpr auto justNext(Ts && ... ts) -> detail::JustNextSender<std::remove_cvref_t<Ts>...>
+    constexpr detail::EmptyValueSender just()
     {
-        return {std::forward_as_tuple(ts...)};
-    }*/
+        return {};
+    }
 
     template<class E>
     constexpr auto justError(E && error) -> detail::JustErrorSender<std::remove_cvref_t<E>>

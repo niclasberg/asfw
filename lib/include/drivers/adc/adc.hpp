@@ -1,5 +1,6 @@
 #pragma once
-#include "async/sender.hpp"
+#include "async/future.hpp"
+#include "async/make_future.hpp"
 #include "async/receiver.hpp"
 #include "adc_error.hpp"
 #include "async/scheduler.hpp"
@@ -84,34 +85,6 @@ namespace drivers::adc
             R receiver_;
         };
 
-        template<dma::DmaTransferFactory TransferFactory>
-        class ReadDmaSender
-        {
-        public:
-            template<template<typename...> class Variant, template<typename...> class Tuple>
-            using value_types = Variant<Tuple<>>;
-
-            template<template<typename...> class Variant>
-            using signal_types = Variant<>;
-
-            template<template<typename...> class Variant>
-            using error_types = Variant<AdcError>;
-
-            template<class R>
-            auto connect(R && receiver) && -> ReadDmaOperation<TransferFactory, std::remove_cvref_t<R>>
-            {
-                return {std::move(transferFactory_), static_cast<R&&>(receiver)};
-            }
-
-            template<class R>
-            auto connect(R && receiver) const & -> ReadDmaOperation<TransferFactory, std::remove_cvref_t<R>>
-            {
-                return {transferFactory_, static_cast<R&&>(receiver)};
-            }
-
-            TransferFactory transferFactory_;
-        };
-
     public:
         explicit Adc(const async::EventEmitter & eventEmitter)
         : eventEmitter_(eventEmitter)
@@ -123,17 +96,20 @@ namespace drivers::adc
         inline static constexpr std::uint16_t maxValue = _maxValue;
 
         template<dma::DmaLike Dma>
-        async::Sender auto read(Dma & dmaDevice, std::uint16_t * buffer)
+        async::Future<void, AdcError> auto read(Dma & dmaDevice, std::uint16_t * buffer)
         {
-            AdcX adcX{};
-
             auto transferFactory = dmaDevice.transferSingle(
-                dma::PeripheralAddress(adcX.getAddress(board::adc::DR::_Offset{})),
+                dma::PeripheralAddress(AdcX{}.getAddress(board::adc::DR::_Offset{})),
                 dma::MemoryAddress(reinterpret_cast<std::uint32_t>(buffer)),
                 NChannels);
+            using TransferFactoryType = decltype(transferFactory);
             
-            return ReadDmaSender<std::remove_cvref_t<decltype(transferFactory)>>{
-                std::move(transferFactory)};
+            return async::makeFuture<void, AdcError>(
+                [this, transferFactory]<typename R>(R && receiver) mutable
+                    -> ReadDmaOperation<TransferFactoryType, std::remove_cvref_t<R>> 
+                {
+                    return {std::move(transferFactory), static_cast<R&&>(receiver)};
+                });
         }
     private:
         async::EventEmitter eventEmitter_;

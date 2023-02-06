@@ -1,5 +1,5 @@
 #pragma once
-#include "sender.hpp"
+#include "future.hpp"
 #include "receiver.hpp"
 #include "tmp/type_list.hpp"
 #include <type_traits>
@@ -8,7 +8,7 @@ namespace async
 {
     namespace detail
     {
-        template<Sender STrue, Sender SFalse, class R>
+        template<AnyFuture STrue, AnyFuture SFalse, class R>
         class ConditionalOperation
         {
             struct Receiver
@@ -47,8 +47,8 @@ namespace async
                 }
             };
 
-            using TrueOperation = ConnectResultType<STrue, Receiver>;
-            using FalseOperation = ConnectResultType<SFalse, Receiver>;
+            using TrueOperation = connect_result_t<STrue, Receiver>;
+            using FalseOperation = connect_result_t<SFalse, Receiver>;
 
             void cleanUp()
             {
@@ -114,32 +114,9 @@ namespace async
         class ConditionalSender
         {
         public:
-            template<template<typename...> class Variant, template<typename...> class Tuple>
-            using value_types = 
-                tmp::nestedApply_<
-                    tmp::unique_<
-                        tmp::concat_<
-                            SenderValueTypes<STrue, tmp::TypeList, tmp::TypeList>,
-                            SenderValueTypes<SFalse, tmp::TypeList, tmp::TypeList>>>,
-                    Variant, Tuple>;
-
-            template<template<typename...> class Variant>
-            using signal_types = 
-                tmp::apply_<
-                    tmp::unique_<
-                        tmp::concat_<
-                            SenderSignalTypes<STrue, tmp::TypeList>,
-                            SenderSignalTypes<SFalse, tmp::TypeList>>>,
-                    Variant>;
-
-            template<template<typename...> class Variant>
-            using error_types = 
-                tmp::apply_<
-                    tmp::unique_<
-                        tmp::concat_<
-                            SenderErrorTypes<STrue, tmp::TypeList>,
-                            SenderErrorTypes<SFalse, tmp::TypeList>>>,
-                    Variant>;
+            // The error and value type is identical for STrue and SFalse, just pick one
+            using value_type = future_value_t<STrue>;
+            using error_type = future_error_t<STrue>;
 
             template<class P2, class STrue2, class SFalse2>
             ConditionalSender(P2 && predicate, STrue2 && senderIfTrue, SFalse2 && senderIfFalse)
@@ -175,14 +152,20 @@ namespace async
 
     inline constexpr struct conditional_t
     {
-        template<std::predicate F, Sender STrue, Sender SFalse>
+        template<std::predicate F, AnyFuture STrue, AnyFuture SFalse>
+            requires 
+                std::same_as<future_value_t<STrue>, future_value_t<STrue>> &&
+                std::same_as<future_error_t<STrue>, future_error_t<STrue>>
         auto operator()(F && predicate, STrue && senderIfTrue, SFalse && senderIfFalse) const
             -> detail::ConditionalSender<std::remove_cvref_t<F>, std::remove_cvref_t<STrue>, std::remove_cvref_t<SFalse>>
         {
             return {static_cast<F&&>(predicate), static_cast<STrue&&>(senderIfTrue), static_cast<SFalse&&>(senderIfFalse)};
         }
 
-        template<Sender STrue, Sender SFalse>
+        template<AnySender STrue, AnySender SFalse>
+            requires 
+                std::same_as<sender_value_t<STrue>, sender_value_t<STrue>> &&
+                std::same_as<sender_error_t<STrue>, sender_error_t<STrue>>
         auto operator()(bool value, STrue && senderIfTrue, SFalse && senderIfFalse) const
             -> detail::ConditionalSender<detail::ConstPredicate, std::remove_cvref_t<STrue>, std::remove_cvref_t<SFalse>>
         {

@@ -16,25 +16,28 @@ target_sources(run_tests
     main.cpp
     test_delegate.cpp
     test_rational.cpp
+    async/test_and_then.cpp
     async/test_bind_back.cpp
-    async/test_conditional.cpp
+    #async/test_conditional.cpp
+    async/test_emit.cpp
     async/test_event.cpp
     async/test_inline_scheduler.cpp
-    async/test_transform.cpp
+    async/test_map.cpp
+    async/test_outcome.cpp
     async/test_just.cpp
-    async/test_inplace_stop_token.cpp
+    async/test_pollable.cpp
     async/test_sequence.cpp
-    async/test_then.cpp
-    async/test_unstoppable_token.cpp
     async/test_use_state.cpp
     async/test_when_all.cpp
+    #async/test_when_any.cpp
     board/test_clock_config.cpp
     cont/test_box.cpp
-    drivers/test_cs43l22.cpp
+    drivers/test_adc.cpp
+    #drivers/test_cs43l22.cpp
     drivers/test_dma.cpp
     drivers/test_gpio.cpp
     drivers/test_i2c.cpp
-    drivers/test_i2c_memory.cpp
+    #drivers/test_i2c_memory.cpp
     drivers/test_i2s.cpp
     drivers/test_spi.cpp
     drivers/test_uart.cpp

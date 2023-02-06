@@ -22,7 +22,7 @@ int main()
     auto serial = uart::makeUart(
         boardDescriptor,
         deviceId<3>,
-        uart::baudRate<9600>,
+        uart::baudRate<9'600>,
         uart::txPin<2, 10>,
         uart::rxPin<2, 11>);
     
@@ -37,27 +37,27 @@ int main()
     Vl6180 rangeFinder{rangeFinderI2c};
     char msgBuffer[128];
 
-    auto status = async::executeSync(scheduler,
-        rangeFinder.init());
-    
-    status = async::executeSync(scheduler,
-        rangeFinder.getDeviceIdentification()
-        | async::then([&](auto deviceId) {
-            std::sprintf(msgBuffer, "Model id: %u, rev. %u.%u\r\n",
-                deviceId.modelId,
-                deviceId.modelRevision.major,
-                deviceId.modelRevision.minor);
+    auto outcome = async::executeSync(scheduler,
+        async::sequence(
+            rangeFinder.init(),
 
-            return serial.write((const uint8_t *)msgBuffer, std::strlen(msgBuffer));
-        }));
-    
-    status = async::executeSync(scheduler, 
-        async::repeat(
-            rangeFinder.readRange()
-            | async::then([&](auto value) {
-                std::sprintf(msgBuffer, "Range : %#04x \r\n", value);
+            rangeFinder.getDeviceIdentification()
+            | async::then([&](auto deviceId) {
+                std::sprintf(msgBuffer, "Model id: %u, rev. %u.%u\r\n",
+                    deviceId.modelId,
+                    deviceId.modelRevision.major,
+                    deviceId.modelRevision.minor);
+
                 return serial.write((const uint8_t *)msgBuffer, std::strlen(msgBuffer));
-            })));
+            }),
+
+            async::repeat(
+                rangeFinder.readRange()
+                | async::then([&](auto value) {
+                    std::sprintf(msgBuffer, "Range : %#04x \r\n", value);
+                    return serial.write((const uint8_t *)msgBuffer, std::strlen(msgBuffer));
+                }))
+        ));
 
     for (;;) { }
 }

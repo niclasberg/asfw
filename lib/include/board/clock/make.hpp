@@ -4,10 +4,7 @@
 #include <boost/hana/map.hpp>
 #include <boost/hana/is_subset.hpp>
 
-namespace board
-{
-
-namespace clock
+namespace board::clock
 {
     namespace detail
     {
@@ -69,49 +66,11 @@ namespace clock
     template<std::uint32_t value> 
     constexpr detail::ClockMultiply<value> multiply{};
 
-    namespace PllSource
-    {
-        constexpr auto HSI = integral_c<detail::PllSrcVal, detail::PllSrcVal::HSI>;
-        constexpr auto HSE = integral_c<detail::PllSrcVal, detail::PllSrcVal::HSE>;
-    }
-
-    namespace SystemClockSource
-    {
-        constexpr auto HSI = detail::sysClkSrc<detail::SwVal::HSI>;
-        constexpr auto HSE = detail::sysClkSrc<detail::SwVal::HSE>;
-        constexpr auto PLL = detail::sysClkSrc<detail::SwVal::PLL>;
-    }
-
-    namespace AhbPrescaler
-    {
-        constexpr auto NO_DIV = hana::make_pair(detail::AHB_PRE, integral_c<detail::HpreVal, detail::HpreVal::NO_DIV>);
-        constexpr auto DIV2   = hana::make_pair(detail::AHB_PRE, integral_c<detail::HpreVal, detail::HpreVal::DIV2>);
-        constexpr auto DIV4   = hana::make_pair(detail::AHB_PRE, integral_c<detail::HpreVal, detail::HpreVal::DIV4>);
-        constexpr auto DIV8   = hana::make_pair(detail::AHB_PRE, integral_c<detail::HpreVal, detail::HpreVal::DIV8>);
-        constexpr auto DIV16  = hana::make_pair(detail::AHB_PRE, integral_c<detail::HpreVal, detail::HpreVal::DIV16>);
-        constexpr auto DIV64  = hana::make_pair(detail::AHB_PRE, integral_c<detail::HpreVal, detail::HpreVal::DIV64>);
-        constexpr auto DIV128 = hana::make_pair(detail::AHB_PRE, integral_c<detail::HpreVal, detail::HpreVal::DIV128>);
-        constexpr auto DIV256 = hana::make_pair(detail::AHB_PRE, integral_c<detail::HpreVal, detail::HpreVal::DIV256>);
-        constexpr auto DIV512 = hana::make_pair(detail::AHB_PRE, integral_c<detail::HpreVal, detail::HpreVal::DIV512>);
-    }
-
-    namespace Apb1Prescaler
-    {
-        constexpr auto NO_DIV = hana::make_pair(detail::APB1_PRE, integral_c<detail::PpreVal, detail::PpreVal::NO_DIV>);
-        constexpr auto DIV2   = hana::make_pair(detail::APB1_PRE, integral_c<detail::PpreVal, detail::PpreVal::DIV2>);
-        constexpr auto DIV4   = hana::make_pair(detail::APB1_PRE, integral_c<detail::PpreVal, detail::PpreVal::DIV4>);
-        constexpr auto DIV8   = hana::make_pair(detail::APB1_PRE, integral_c<detail::PpreVal, detail::PpreVal::DIV8>);
-        constexpr auto DIV16  = hana::make_pair(detail::APB1_PRE, integral_c<detail::PpreVal, detail::PpreVal::DIV16>);
-    }
-
-    namespace Apb2Prescaler
-    {
-        constexpr auto NO_DIV = hana::make_pair(detail::APB2_PRE, integral_c<detail::PpreVal, detail::PpreVal::NO_DIV>);
-        constexpr auto DIV2   = hana::make_pair(detail::APB2_PRE, integral_c<detail::PpreVal, detail::PpreVal::DIV2>);
-        constexpr auto DIV4   = hana::make_pair(detail::APB2_PRE, integral_c<detail::PpreVal, detail::PpreVal::DIV4>);
-        constexpr auto DIV8   = hana::make_pair(detail::APB2_PRE, integral_c<detail::PpreVal, detail::PpreVal::DIV8>);
-        constexpr auto DIV16  = hana::make_pair(detail::APB2_PRE, integral_c<detail::PpreVal, detail::PpreVal::DIV16>);
-    }
+    using PllSource = rcc::PLLCFGR::PllSrcVal;
+    using SystemClockSource = rcc::CFGR::SwVal;
+    using AhbPrescaler = rcc::CFGR::HpreVal;
+    using Apb1Prescaler = rcc::CFGR::PpreVal;
+    using Apb2Prescaler = rcc::CFGR::PpreVal;
 
     template<detail::PllSrcVal source, std::uint32_t divide>
     constexpr auto pllInput(integral_constant<detail::PllSrcVal, source>, detail::ClockDivide<divide>)
@@ -124,6 +83,97 @@ namespace clock
     {
         return hana::make_pair(detail::I2SCLK_SOURCE, detail::I2SPllConfigFactory<mult, div>{});
     }
+
+    struct InputClockConfig
+    {
+        std::uint32_t hsiClockFrequency = 16'000'000; 
+        std::uint32_t hseClockFrequency = 8'000'000;
+    };
+
+    struct PllInputConfig
+    {
+
+    };
+
+    struct SystemClockConfig
+    {
+        constexpr SystemClockConfig() : clockSource(SystemClockSource::HSI) { }
+
+        constexpr Rational<std::uint32_t> getSystemClockFrequency(InputClockConfig inputClock) const
+        {
+            if (clockSource == SystemClockSource::HSI)
+                return { inputClock.hsiClockFrequency };
+            else if (clockSource == SystemClockSource::HSE)
+                return { inputClock.hseClockFrequency };
+        }
+
+        SystemClockSource clockSource = SystemClockSource::HSI;
+        union {
+            const Rational<std::uint32_t> scale;
+        };
+    };
+
+    namespace detail
+    {
+        constexpr std::uint32_t getAhbClockDivider(HpreVal ahbPreScaler)
+        {
+            if (ahbPreScaler == HpreVal::NO_DIV) return 1;
+            else if (ahbPreScaler == HpreVal::DIV2) return 2;
+            else if (ahbPreScaler == HpreVal::DIV4) return 4;
+            else if (ahbPreScaler == HpreVal::DIV8) return 8;
+            else if (ahbPreScaler == HpreVal::DIV16) return 16;
+            else if (ahbPreScaler == HpreVal::DIV64) return 64;
+            else if (ahbPreScaler == HpreVal::DIV128) return 128;
+            else if (ahbPreScaler == HpreVal::DIV256) return 256;
+            else if (ahbPreScaler == HpreVal::DIV512) return 512;
+        }
+
+        constexpr std::uint32_t getApbClockDivider(PpreVal apbPreScaler)
+        {
+            if (apbPreScaler == PpreVal::NO_DIV) return 1;
+            else if (apbPreScaler == PpreVal::DIV2) return 2;
+            else if (apbPreScaler == PpreVal::DIV4) return 4;
+            else if (apbPreScaler == PpreVal::DIV8) return 8;
+            else if (apbPreScaler == PpreVal::DIV16) return 16;
+        }
+    }
+
+    struct ClockConfig
+    {
+        constexpr Rational<std::uint32_t> getSystemClockFrequency()
+        {
+            if (clockSource == SystemClockSource::HSI)
+                return { inputClock.hsiClockFrequency };
+            else if (clockSource == SystemClockSource::HSE)
+                return { inputClock.hseClockFrequency };
+        }
+
+        static constexpr Rational<std::uint32_t> getAhbClockFrequency()
+        {
+            return getSystemClockFrequency() / detail::getAhbClockDivider(ahbPreScaler);
+        }
+
+        static constexpr Rational<std::uint32_t> getApb1ClockFrequency()
+        {
+            return ClockConfig::getAhbClockFrequency() / detail::getApbClockDivider(apb1PreScaler);
+        }
+
+        static constexpr Rational<std::uint32_t> getApb2ClockFrequency()
+        {
+            return ClockConfig::getAhbClockFrequency() / detail::getApbClockDivider(apb2PreScaler);
+        }
+
+        /*static constexpr Rational<std::uint32_t> getI2SClockFrequency()
+        {
+            return _PllConfig::getI2SClockFrequency();
+        }*/
+
+        InputClockConfig inputClock;
+        SystemClockSource clockSource = SystemClockSource::HSI;
+        AhbPrescaler ahbPreScaler = AhbPrescaler::NO_DIV;
+        Apb1Prescaler apb1Prescaler = Apb1Prescaler::NO_DIV;
+        Apb2Prescaler apb2Prescaler = Apb2Prescaler::NO_DIV;
+    };
 
     constexpr auto systemClock(detail::SysClkSrc<detail::SwVal::HSI> src)
     {
@@ -195,6 +245,4 @@ namespace clock
             hana::value(apb2Prescaler),
             PllConfig>{};
     }
-}
-
 }

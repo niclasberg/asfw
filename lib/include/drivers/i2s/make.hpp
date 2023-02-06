@@ -5,166 +5,159 @@
 #include "board/clock/config.hpp"
 #include "drivers/spi/detail/interrupt.hpp"
 #include "drivers/gpio/make.hpp"
-#include "opt/option.hpp"
 #include "peripheral_types.hpp"
 
 namespace drivers::i2s
 {
-    namespace detail
+    // I2S Standard
+    using Standard = board::spi::I2SCFGR::I2sStdVal;
+
+    using BitDepth = board::spi::I2SCFGR::ChLenVal;
+    using DataFrameFormat = board::spi::I2SCFGR::DataLenVal;
+    using ClockPolarity = board::spi::I2SCFGR::CkPolVal;
+
+    enum class TransferMode
     {
-        // Generate unique option tags
-        MAKE_OPTION_KEY(MODE);
-        MAKE_OPTION_KEY(STANDARD);
-        MAKE_OPTION_KEY(BIT_DEPTH);
-        MAKE_OPTION_KEY(FRAME_FORMAT);
-        MAKE_OPTION_KEY(MCKL_OUT);
-        MAKE_OPTION_KEY(CLK_POL);
-        MAKE_OPTION_KEY(SAMPLE_FREQ);
-        MAKE_OPTION_KEY(TRANSFER_MODE);
-        MAKE_OPTION_KEY(MASTER);
-        MAKE_OPTION_KEY(IO_POLICY);
-        MAKE_OPTION_KEY(SD_PIN);
-        MAKE_OPTION_KEY(WS_PIN);
-        MAKE_OPTION_KEY(SCLK_PIN);
-        MAKE_OPTION_KEY(MCLK_PIN);
+        TX_ONLY,
+        RX_ONLY
+    };
 
-        struct tx_only_tag {};
-        struct rx_only_tag {};
-    }
-
-    template<std::uint32_t value>
-    constexpr auto sampleFreq = opt::makeOption(detail::SAMPLE_FREQ, uint32_c<value>);
-
-    namespace Standard
+    struct MasterConfig
     {
-        constexpr auto PHILIPS = opt::makeOption(detail::STANDARD, constant_c<detail::I2sStdVal::PHILIPS>);
-        constexpr auto MSB     = opt::makeOption(detail::STANDARD, constant_c<detail::I2sStdVal::MSB>);
-        constexpr auto LSB     = opt::makeOption(detail::STANDARD, constant_c<detail::I2sStdVal::LSB>);
-        constexpr auto PCM     = opt::makeOption(detail::STANDARD, constant_c<detail::I2sStdVal::PCM>);
-    }
-
-    namespace BitDepth
-    {
-        constexpr auto BITS16 = opt::makeOption(detail::BIT_DEPTH, false_c);
-        constexpr auto BITS32 = opt::makeOption(detail::BIT_DEPTH, true_c);
-    }
-
-    namespace TransferMode
-    {
-        constexpr auto TX_ONLY = opt::makeOption(detail::TRANSFER_MODE, detail::tx_only_tag{});
-        constexpr auto RX_ONLY = opt::makeOption(detail::TRANSFER_MODE, detail::rx_only_tag{});
-    }
-
-    namespace DataFrameFormat {
-        constexpr auto BITS16 = opt::makeOption(detail::FRAME_FORMAT, constant_c<detail::DataLenVal::BITS16>); 
-        constexpr auto BITS24 = opt::makeOption(detail::FRAME_FORMAT, constant_c<detail::DataLenVal::BITS24>); 
-        constexpr auto BITS32 = opt::makeOption(detail::FRAME_FORMAT, constant_c<detail::DataLenVal::BITS32>); 
-    }
-
-    namespace ClkPolarity 
-    {
-        constexpr auto LOW  = opt::makeOption(detail::CLK_POL, constant_c<detail::CkPolVal::LOW>);
-        constexpr auto HIGH = opt::makeOption(detail::CLK_POL, constant_c<detail::CkPolVal::HIGH>);
-    }
-
-    namespace MasterClockOut 
-    {
-        constexpr auto OFF = opt::makeOption(detail::MCKL_OUT, false_c);
-        constexpr auto ON  = opt::makeOption(detail::MCKL_OUT, true_c);
-    } 
-
-	template<std::uint8_t port, std::uint8_t pin> 
-	constexpr auto serialDataPin = opt::makeOption(detail::SD_PIN, PIN<port, pin>);
-
-    template<std::uint8_t port, std::uint8_t pin> 
-	constexpr auto serialClockPin = opt::makeOption(detail::SCLK_PIN, PIN<port, pin>);
-
-    template<std::uint8_t port, std::uint8_t pin> 
-	constexpr auto masterClockPin = opt::makeOption(detail::MCLK_PIN, PIN<port, pin>);
-
-    template<std::uint8_t port, std::uint8_t pin> 
-	constexpr auto wordSelectPin = opt::makeOption(detail::WS_PIN, PIN<port, pin>);
+        std::uint8_t id;
+        Pin serialDataPin;
+        Pin serialClockPin;
+        Pin wordSelectPin;
+        Pin masterClockPin;
+        std::uint32_t sampleRate;
+        TransferMode transferMode = TransferMode::TX_ONLY;
+        Standard standard = Standard::PHILIPS;
+        bool masterClockOut = false;
+        DataFrameFormat dataFrameFormat = DataFrameFormat::BITS16;
+        BitDepth bitDepth = BitDepth::BITS16;
+        ClockPolarity clockPolarity = ClockPolarity::LOW;
+    };
 
     namespace detail
     {
-        struct slave_tag {};
-        struct master_tag {};
-
-        constexpr auto getI2sMode(slave_tag, tx_only_tag) { return integral_c<I2sCfgVal, I2sCfgVal::SLAVE_TX>; }
-        constexpr auto getI2sMode(slave_tag, rx_only_tag) { return integral_c<I2sCfgVal, I2sCfgVal::SLAVE_RX>; }
-        constexpr auto getI2sMode(master_tag, tx_only_tag) { return integral_c<I2sCfgVal, I2sCfgVal::MASTER_TX>; }
-        constexpr auto getI2sMode(master_tag, rx_only_tag) { return integral_c<I2sCfgVal, I2sCfgVal::MASTER_RX>; }
-    }
-
-    template<class Board, std::uint8_t id, class ... Options>
-    auto makeI2sMaster(Board boardDescriptor, DeviceId<id> deviceId, Options && ... opts)
-    {
-        constexpr auto spiX = boardDescriptor.getPeripheral(PeripheralTypes::SPI<id>); 
-
-        auto options = opt::makeOptionSet(
-            opt::fields(
-                detail::BIT_DEPTH,
-                detail::CLK_POL,
-                detail::FRAME_FORMAT,
-                detail::IO_POLICY,
-                detail::MCKL_OUT,
-                detail::SAMPLE_FREQ,
-                detail::STANDARD,
-                detail::TRANSFER_MODE,
-                detail::SD_PIN,
-                detail::WS_PIN,
-                detail::SCLK_PIN,
-                detail::MCLK_PIN),
-            std::forward<Options>(opts)...);
-
-        // Apply default options
-        auto sampleFrequency = opt::get(options, detail::SAMPLE_FREQ);
-        auto mcklOut = opt::getOrDefault(options, detail::MCKL_OUT, false_c);
-        auto clockPolarity = opt::getOrDefault(options, detail::CLK_POL, ClkPolarity::LOW);
-        auto i2sStandard = opt::getOrDefault(options, detail::STANDARD, Standard::PHILIPS);
-        auto transferMode = opt::getOrDefault(options, detail::TRANSFER_MODE, TransferMode::TX_ONLY);
-        auto i2sMode = getI2sMode(detail::master_tag{}, transferMode);
-        auto bitDepth = opt::getOrDefault(options, detail::BIT_DEPTH, BitDepth::BITS16);
-        auto frameFormat = opt::getOrDefault(options, detail::FRAME_FORMAT, DataFrameFormat::BITS16);
-
-        // Configure pins
-        gpio::makeAltFnPin(
-			boardDescriptor,
-			opt::get(options, detail::SCLK_PIN), 
-			gpio::AltFn::SPI3);
-        gpio::makeAltFnPin(
-			boardDescriptor,
-			opt::get(options, detail::WS_PIN), 
-			gpio::AltFn::SPI3);
-        gpio::makeAltFnPin(
-			boardDescriptor,
-			opt::get(options, detail::SD_PIN), 
-			gpio::AltFn::SPI3);
-        
-        if constexpr (mcklOut)
+        template<std::uint8_t deviceId>
+        constexpr gpio::AltFn getAlternateFunction()
         {
-            gpio::makeAltFnPin(
-			    boardDescriptor,
-                opt::get(options, detail::MCLK_PIN), 
-                gpio::AltFn::SPI3);
+            if constexpr (deviceId < 2)
+                return gpio::AltFn::SPI1_2;
+            else
+                return gpio::AltFn::SPI3;
         }
 
-        // Configure peripheral
-        spiX.enable();
-        detail::configureI2sClock(
-            spiX, 
-            constant_c<round(boardDescriptor.getI2SClockFrequency())>, 
-            sampleFrequency, 
-            bitDepth, 
-            mcklOut);
+        constexpr std::uint32_t computeClockDivider(
+            bool masterClockOutEnable, 
+            std::uint32_t packetLength,
+            std::uint32_t i2sClockFrequency,
+            std::uint32_t sampleFrequency)
+        {
+            // MCKL_OUT == ON  => FS = i2sclk / (256 * (2*I2SDIV + ODD))
+            // MCKL_OUT == OFF => FS = i2sclk / (2*packetLength * (2*I2SDIV + ODD))
+            if (masterClockOutEnable)
+            {
+                return (((i2sClockFrequency / 256U) * 10U) / sampleFrequency + 5U) / 10U;
+            }
+            else
+            {
+                return (((i2sClockFrequency / (2U * packetLength)) * 10U) / sampleFrequency + 5U) / 10U;
+            }
+        }
+
+        template<class SpiX, 
+            std::uint32_t i2sClockFrequency_, 
+            std::uint32_t sampleFrequency_, 
+            bool use16BitData_, 
+            bool mcklOut_>
+        void configureI2sClock()
+        {
+            constexpr std::uint32_t packetLength = use16BitData_ ? 16U : 32U;
+            constexpr std::uint32_t clockDivider = computeClockDivider(mcklOut_, packetLength, i2sClockFrequency_, sampleFrequency_);
+            static_assert((clockDivider > 2U), "The clock frequency for the I2S peripheral is too low");
+
+            constexpr std::uint32_t i2sodd = (uint32_t)(clockDivider & (uint32_t)1U);
+            constexpr std::uint32_t i2sdiv = (uint32_t)((clockDivider - i2sodd) / 2U);
+
+            reg::apply(SpiX{},
+                reg::write(board::spi::I2SPR::ODD, constant_c<i2sodd>),
+                reg::write(board::spi::I2SPR::I2SDIV, constant_c<i2sdiv>),
+                reg::write(board::spi::I2SPR::MCKOE, constant_c<mcklOut_>));
+        }
+    }
+
+    template<MasterConfig config>
+    struct makeI2sMaster_t
+    {
+        template<class Board>
+        constexpr auto operator()(Board boardDescriptor) const
+        {
+            constexpr auto spiX = boardDescriptor.getPeripheral(PeripheralTypes::SPI<config.id>); 
+            using board::spi::I2SCFGR::I2sCfgVal;
+            using SpiX = decltype(spiX);
+
+            // Configure pins
+            constexpr gpio::AltFn alternateFunction = detail::getAlternateFunction<config.id>();
+            gpio::makeAltFnPin<gpio::AltFnPinConfig {
+                .pin = config.serialClockPin,
+                .altFn = alternateFunction
+            }>(boardDescriptor);
+            gpio::makeAltFnPin<gpio::AltFnPinConfig {
+                .pin = config.wordSelectPin,
+                .altFn = alternateFunction
+            }>(boardDescriptor);
+            gpio::makeAltFnPin<gpio::AltFnPinConfig {
+                .pin = config.serialDataPin,
+                .altFn = alternateFunction
+            }>(boardDescriptor);
             
-        detail::initI2S(spiX, clockPolarity, i2sStandard, i2sMode, bitDepth, frameFormat);
+            if constexpr (config.masterClockOut)
+            {
+                gpio::makeAltFnPin<gpio::AltFnPinConfig {
+                    .pin = config.masterClockPin,
+                    .altFn = alternateFunction
+                }>(boardDescriptor);
+            }
 
-        // Enable interrupt 
-        auto interrupt = spi::detail::getInterrupt(deviceId);
-		boardDescriptor.enableIRQ(interrupt);
+            // Configure peripheral
+            spiX.enable();
+            detail::configureI2sClock<
+                SpiX, 
+                round(boardDescriptor.getI2SClockFrequency()), 
+                config.sampleRate, 
+                config.bitDepth == BitDepth::BITS16, 
+                config.masterClockOut>();
+                
+            constexpr I2sCfgVal i2cConfig = config.transferMode == TransferMode::RX_ONLY ?
+                I2sCfgVal::MASTER_RX : I2sCfgVal::MASTER_TX;
 
-        return I2S<decltype(spiX)>{
-            boardDescriptor.getInterruptEvent(interrupt) };
-    }  
+            reg::apply(SpiX{},
+                reg::write(board::spi::I2SCFGR::CKPOL, constant_c<config.clockPolarity>),
+                reg::write(board::spi::I2SCFGR::I2SSTD, constant_c<config.standard>),
+                reg::write(board::spi::I2SCFGR::I2SCFG, constant_c<i2cConfig>),
+                reg::write(board::spi::I2SCFGR::CHLEN, constant_c<config.bitDepth>),
+                reg::write(board::spi::I2SCFGR::DATLEN, constant_c<config.dataFrameFormat>),
+                // Set i2s mode instead of Spi
+                reg::set(board::spi::I2SCFGR::I2SMOD));
+
+            // Disable DMA
+            reg::apply(SpiX{}, 
+                reg::clear(board::spi::CR2::TXDMAEN),
+                reg::clear(board::spi::CR2::RXDMAEN));
+
+            // Enable
+            reg::set(SpiX{}, board::spi::I2SCFGR::I2SE);  
+
+            // Enable interrupt 
+            auto interrupt = spi::detail::getInterrupt<config.id>();
+            boardDescriptor.enableIRQ(interrupt);
+
+            return I2S<SpiX>{ boardDescriptor.getInterruptEvent(interrupt) };   
+        }
+    };
+
+    template<MasterConfig config>
+    inline constexpr makeI2sMaster_t<config> makeI2sMaster {};
 }

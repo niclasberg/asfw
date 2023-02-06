@@ -1,5 +1,6 @@
 #pragma once
 #include "types.hpp"
+#include "board/regmap/gpio.hpp"
 #include "reg/write.hpp"
 #include "reg/toggle.hpp"
 #include "reg/set.hpp"

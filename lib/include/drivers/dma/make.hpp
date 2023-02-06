@@ -1,5 +1,4 @@
 #pragma once
-#include "opt/option.hpp"
 #include "peripheral_types.hpp"
 #include "board/interrupts.hpp"
 #include "dma.hpp"
@@ -10,11 +9,6 @@ namespace drivers::dma
 {
     namespace detail
     {
-        // Generate unique option tags
-        MAKE_OPTION_KEY(CHANNEL);
-        MAKE_OPTION_KEY(PRIORITY);
-        MAKE_OPTION_KEY(DATA_SIZE);
-
         template<std::uint8_t deviceId, std::uint8_t streamId> struct DmaStreamId {};
 
         // Mapping between dma and stream id to interrupt
@@ -36,74 +30,68 @@ namespace drivers::dma
         constexpr auto getDmaInterrupt(DmaStreamId<1, 7>) { return board::Interrupts::DMA2_Stream7; }
     }
 
-    template<std::uint8_t deviceId, std::uint8_t _streamId>
-    constexpr auto streamId = detail::DmaStreamId<deviceId, _streamId>{};
-    
-    namespace Channel
+    struct DmaId
     {
-        constexpr auto CHANNEL0 = opt::makeOption(detail::CHANNEL, constant_c<board::dma::CR::ChselVal::CHANNEL0>);
-        constexpr auto CHANNEL1 = opt::makeOption(detail::CHANNEL, constant_c<board::dma::CR::ChselVal::CHANNEL1>);
-        constexpr auto CHANNEL2 = opt::makeOption(detail::CHANNEL, constant_c<board::dma::CR::ChselVal::CHANNEL2>);
-        constexpr auto CHANNEL3 = opt::makeOption(detail::CHANNEL, constant_c<board::dma::CR::ChselVal::CHANNEL3>);
-        constexpr auto CHANNEL4 = opt::makeOption(detail::CHANNEL, constant_c<board::dma::CR::ChselVal::CHANNEL4>);
-        constexpr auto CHANNEL5 = opt::makeOption(detail::CHANNEL, constant_c<board::dma::CR::ChselVal::CHANNEL5>);
-        constexpr auto CHANNEL6 = opt::makeOption(detail::CHANNEL, constant_c<board::dma::CR::ChselVal::CHANNEL6>);
-        constexpr auto CHANNEL7 = opt::makeOption(detail::CHANNEL, constant_c<board::dma::CR::ChselVal::CHANNEL7>);
-    }
-
-    namespace Priority
-    {
-        constexpr auto LOW       = opt::makeOption(detail::PRIORITY, constant_c<board::dma::CR::PlVal::LOW>);
-        constexpr auto MEDIUM    = opt::makeOption(detail::PRIORITY, constant_c<board::dma::CR::PlVal::MEDIUM>);
-        constexpr auto HIGH      = opt::makeOption(detail::PRIORITY, constant_c<board::dma::CR::PlVal::HIGH>);
-        constexpr auto VERY_HIGH = opt::makeOption(detail::PRIORITY, constant_c<board::dma::CR::PlVal::VERY_HIGH>);
-    }
-
-    namespace DataSize
-    {
-        constexpr auto BITS8  = opt::makeOption(detail::DATA_SIZE, uint32_c<0>);
-        constexpr auto BITS16 = opt::makeOption(detail::DATA_SIZE, uint32_c<1>);
-        constexpr auto BITS32 = opt::makeOption(detail::DATA_SIZE, uint32_c<2>);
-    }
-
-    template<class Board, std::uint8_t deviceId, std::uint8_t streamId, class ... Options>
-    constexpr auto makeStream(Board boardDescriptor, detail::DmaStreamId<deviceId, streamId> dmaStreamId, Options && ... opts)
-    {
-        constexpr auto dmaX = boardDescriptor.getPeripheral(PeripheralTypes::DMA<deviceId>); 
-        constexpr auto streamIndex = uint8_c<streamId>;
-
-        auto options = opt::makeOptionSet(
-            opt::fields(
-                detail::CHANNEL, 
-                detail::DATA_SIZE, 
-                detail::PRIORITY),
-            std::forward<Options>(opts)...);
-
-        // Apply default options
-        auto channel   = opt::getOrDefault(options, detail::CHANNEL, Channel::CHANNEL0);
-        auto priority  = opt::getOrDefault(options, detail::PRIORITY, Priority::LOW);
-        auto psize     = opt::getOrDefault(options, detail::DATA_SIZE, DataSize::BITS8);
-
-        // Setup peripheral
-        dmaX.enable();
-
-        // Disable the stream if currently enabled
-        if(reg::bitIsSet(dmaX, board::dma::CR::EN[streamIndex]))
+        constexpr DmaId(std::uint8_t _deviceId, std::uint8_t _streamId)
+        : deviceId(_deviceId), streamId(_streamId)
         {
-            reg::clear(dmaX, board::dma::CR::EN[streamIndex]);
-            while(reg::bitIsSet(dmaX, board::dma::CR::EN[streamIndex])) { }
+
         }
 
-        reg::apply(dmaX, 
-            reg::write(board::dma::CR::CHSEL[streamIndex], channel),
-            reg::write(board::dma::CR::PL[streamIndex], priority),
-            reg::write(board::dma::CR::PSIZE[streamIndex], psize),
-            reg::set(board::dma::CR::MINC[streamIndex]));
+        std::uint8_t deviceId; 
+        std::uint8_t streamId;
+    };
+    
+    // DMA channel
+    using Channel = board::dma::CR::ChselVal;
+    
+    // Priority
+    using Priority = board::dma::CR::PlVal;
 
-        auto interrupt = detail::getDmaInterrupt(dmaStreamId);
-		boardDescriptor.enableIRQ(interrupt);
-        auto event = boardDescriptor.getInterruptEvent(interrupt);
+    using DataSize = board::dma::CR::PsizeVal;
 
-        return Dma<decltype(dmaX), streamId>{event};
-    }
+    struct DmaConfig
+    {
+        DmaId id;
+        Channel channel;
+        DataSize dataSize = DataSize::BYTE;
+        Priority priority = Priority::LOW;
+    };
+
+    template<DmaConfig config>
+    struct makeStream_t 
+    {
+        template<class Board>
+        constexpr auto operator()(Board boardDescriptor) const
+        {
+            constexpr auto dmaX = boardDescriptor.getPeripheral(PeripheralTypes::DMA<config.id.deviceId>); 
+            constexpr auto streamIndex = uint8_c<config.id.streamId>;
+
+            // Setup peripheral
+            dmaX.enable();
+
+            // Disable the stream if currently enabled
+            if(reg::bitIsSet(dmaX, board::dma::CR::EN[streamIndex]))
+            {
+                reg::clear(dmaX, board::dma::CR::EN[streamIndex]);
+                while(reg::bitIsSet(dmaX, board::dma::CR::EN[streamIndex])) { }
+            }
+
+            reg::apply(dmaX, 
+                reg::write(board::dma::CR::CHSEL[streamIndex], constant_c<config.channel>),
+                reg::write(board::dma::CR::PL[streamIndex], constant_c<config.priority>),
+                reg::write(board::dma::CR::PSIZE[streamIndex], constant_c<config.dataSize>),
+                reg::set(board::dma::CR::MINC[streamIndex]));
+
+            auto interrupt = detail::getDmaInterrupt(
+                detail::DmaStreamId<config.id.deviceId, config.id.streamId>{});
+            boardDescriptor.enableIRQ(interrupt);
+            auto event = boardDescriptor.getInterruptEvent(interrupt);
+
+            return Dma<decltype(dmaX), config.id.streamId>{event};
+        }
+    };
+
+    template<DmaConfig config>
+    inline constexpr makeStream_t<config> makeStream{};
 }

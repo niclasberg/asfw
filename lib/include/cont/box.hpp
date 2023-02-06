@@ -10,7 +10,7 @@ namespace cont
      * This class bypasses the normal lifetime of the 
      * contained type, meaning that the contained value 
      * is not initialized by the constructor, nor destructed
-     * by the destructor. 
+     * by the destructor.
      */
     template<class T>
     class Box
@@ -72,5 +72,17 @@ namespace cont
         union {
             T value_;
         };
+    };
+
+    template<>
+    struct Box<void>
+    {
+        template<class ... Args>
+        void construct(Args && ... args) { }
+
+        template<class F>
+        void constructWith(F && f) { }
+
+        void destruct() { }
     };
 }

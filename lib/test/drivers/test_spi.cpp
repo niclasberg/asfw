@@ -1,7 +1,9 @@
 #include "../catch.hpp"
 #include "../mocks/mock_peripheral.hpp"
 #include "../mocks/mock_board.hpp"
+#include "async/future.hpp"
 #include "async/receive.hpp"
+#include "async/execute_sync.hpp"
 #include "async/use_scheduler.hpp"
 #include "async/inline_scheduler.hpp"
 #include "board/regmap/spi.hpp"
@@ -24,68 +26,127 @@ namespace {
 
 TEST_CASE("Spi make")
 {
-    auto mockBoard = makeMockBoard(mockPeripherals<MockPeripherals>);
+    auto mockBoard = MockBoard<MockPeripherals>();
     MockSpi mockSpi{};
     resetPeripheral(mockSpi);
     using namespace drivers;
 
     SECTION("Setting BitOrder::LSB_FIRST should set the correct register")
     {
-        spi::makeSpi(mockBoard, deviceId<0>, spi::BitOrder::LSB_FIRST);
+        spi::makeSpi<spi::SpiConfig {
+            .deviceId = 0,
+            .mosiPin = Pin(0, 0),
+            .misoPin = Pin(0, 0),
+            .bitOrder = spi::BitOrder::LSB_FIRST
+        }>(mockBoard);
+
         REQUIRE(reg::bitIsSet(mockSpi, board::spi::CR1::LSBFIRST));
     }
 
     SECTION("Setting BitOrder::MSB_FIRST should set the correct register")
     {
-        spi::makeSpi(mockBoard, deviceId<0>, spi::BitOrder::MSB_FIRST);
+        spi::makeSpi<spi::SpiConfig {
+            .deviceId = 0,
+            .mosiPin = Pin(0, 0),
+            .misoPin = Pin(0, 0),
+            .bitOrder = spi::BitOrder::MSB_FIRST
+        }>(mockBoard);
+
         REQUIRE(!reg::bitIsSet(mockSpi, board::spi::CR1::LSBFIRST));
     }
 
     SECTION("Setting ClockPolarity::LOW should set the correct register")
     {
-        spi::makeSpi(mockBoard, deviceId<0>, spi::ClockPolarity::LOW);
+        spi::makeSpi<spi::SpiConfig {
+            .deviceId = 0,
+            .mosiPin = Pin(0, 0),
+            .misoPin = Pin(0, 0),
+            .clockPolarity = spi::ClockPolarity::LOW
+        }>(mockBoard);
+
         REQUIRE(!reg::bitIsSet(mockSpi, board::spi::CR1::CPOL));
     }
 
     SECTION("Setting ClockPolarity::HIGH should set the correct register")
     {
-        spi::makeSpi(mockBoard, deviceId<0>, spi::ClockPolarity::HIGH);
+        spi::makeSpi<spi::SpiConfig {
+            .deviceId = 0,
+            .mosiPin = Pin(0, 0),
+            .misoPin = Pin(0, 0),
+            .clockPolarity = spi::ClockPolarity::HIGH
+        }>(mockBoard);
+
         REQUIRE(reg::bitIsSet(mockSpi, board::spi::CR1::CPOL));
     }
 
     SECTION("Setting ClockPhase::LOW should set the correct register")
     {
-        spi::makeSpi(mockBoard, deviceId<0>, spi::ClockPhase::LOW);
+        spi::makeSpi<spi::SpiConfig {
+            .deviceId = 0,
+            .mosiPin = Pin(0, 0),
+            .misoPin = Pin(0, 0),
+            .clockPhase = spi::ClockPhase::LOW
+        }>(mockBoard);
+        
         REQUIRE(!reg::bitIsSet(mockSpi, board::spi::CR1::CPHA));
     }
 
     SECTION("Setting ClockPhase::HIGH should set the correct register")
     {
-        spi::makeSpi(mockBoard, deviceId<0>, spi::ClockPhase::HIGH);
+        spi::makeSpi<spi::SpiConfig {
+            .deviceId = 0,
+            .mosiPin = Pin(0, 0),
+            .misoPin = Pin(0, 0),
+            .clockPhase = spi::ClockPhase::HIGH
+        }>(mockBoard);
+
         REQUIRE(reg::bitIsSet(mockSpi, board::spi::CR1::CPHA));
     }
 
     SECTION("Setting BaudRateDivider::DIV_2 should set the correct register")
     {
-        spi::makeSpi(mockBoard, deviceId<0>, spi::BaudRateDivider::DIV_2);
+        spi::makeSpi<spi::SpiConfig {
+            .deviceId = 0,
+            .mosiPin = Pin(0, 0),
+            .misoPin = Pin(0, 0),
+            .baudRateDivider = spi::BaudRateDivider::PCKL_DIV2
+        }>(mockBoard);
         REQUIRE(reg::read(mockSpi, board::spi::CR1::BR) == 0);
     }
 
     SECTION("Setting BaudRateDivider::DIV_256 should set the correct register")
     {
-        spi::makeSpi(mockBoard, deviceId<0>, spi::BaudRateDivider::DIV_256);
+        spi::makeSpi<spi::SpiConfig {
+            .deviceId = 0,
+            .mosiPin = Pin(0, 0),
+            .misoPin = Pin(0, 0),
+            .baudRateDivider = spi::BaudRateDivider::PCKL_DIV256
+        }>(mockBoard);
+
         REQUIRE(reg::read(mockSpi, board::spi::CR1::BR) == 0x7);
     }
     
     SECTION("Setting FrameFormat::BYTE should set the correct register")
     {
-        spi::makeSpi(mockBoard, deviceId<0>, spi::FrameFormat::BYTE);
+        spi::makeSpi<spi::SpiConfig {
+            .deviceId = 0,
+            .mosiPin = Pin(0, 0),
+            .misoPin = Pin(0, 0),
+            .dataFrameFormat = spi::DataFrameFormat::BYTE
+        }>(mockBoard);
+
         REQUIRE(reg::read(mockSpi, board::spi::CR1::DFF) == 0);
     }
 
     SECTION("Setting FrameFormat::HALF_WORD should set the correct register")
     {
-        spi::makeSpi(mockBoard, deviceId<0>, spi::FrameFormat::HALF_WORD);
+        spi::makeSpi<spi::SpiConfig {
+            .deviceId = 0,
+            .mosiPin = Pin(0, 0),
+            .misoPin = Pin(0, 0),
+            .dataFrameFormat = spi::DataFrameFormat::HALF_WORD
+        }>(mockBoard);
+
         REQUIRE(reg::read(mockSpi, board::spi::CR1::DFF) == 0x1);
     }
 }
@@ -97,19 +158,18 @@ TEST_CASE("Spi read and write")
     eventEmitter.unsubscribe();
     auto scheduler = async::InlineScheduler{};
 
-    auto mockBoard = makeMockBoard(mockPeripherals<MockPeripherals>);
+    MockBoard<MockPeripherals> mockBoard;
     MockSpi mockSpi{};
     resetPeripheral(mockSpi);
-    auto spi = makeSpi(mockBoard, deviceId<0>);
+    auto spi = makeSpi<SpiConfig {
+        .deviceId = 0,
+        .mosiPin = Pin(0, 0),
+        .misoPin = Pin(0, 0)
+    }>(mockBoard);
 
-    SECTION("The write sender should contain a value and error typedef")
+    SECTION("The write sender should fullfill the future concept")
     {
-        using SenderType = decltype(spi.write(nullptr, 0));
-        using ValueTypes = async::SenderValueTypes<SenderType, TypeList, TypeList>;
-        using ErrorTypes = async::SenderErrorTypes<SenderType, TypeList>;
-
-        STATIC_REQUIRE(std::is_same_v<ValueTypes, TypeList<TypeList<>>>);
-        STATIC_REQUIRE(std::is_same_v<ErrorTypes, TypeList<SpiError>>);
+        STATIC_REQUIRE(async::Future<decltype(spi.write(nullptr, 0)), void, SpiError>);
     }
 
     SECTION("The write operation should finish instantaneously when the input is empty")
@@ -185,64 +245,42 @@ TEST_CASE("Spi read and write")
         REQUIRE(valueReceived);
     }
 
-    SECTION("The read sender should contain a value and error typedef")
+    SECTION("The read future should fullfill the Future concept")
     {
-        using SenderType = decltype(spi.read(nullptr, 0));
-        using ValueTypes = async::SenderValueTypes<SenderType, TypeList, TypeList>;
-        using ErrorTypes = async::SenderErrorTypes<SenderType, TypeList>;
+        using FutureType = decltype(spi.read(nullptr, 0));
 
-        STATIC_REQUIRE(std::is_same_v<ValueTypes, TypeList<TypeList<std::uint8_t *, std::uint32_t>>>);
-        STATIC_REQUIRE(std::is_same_v<ErrorTypes, TypeList<SpiError>>);
+        STATIC_REQUIRE(async::Future<FutureType, void, SpiError>);
     }
 
-    SECTION("The read operation should finish instantaneously when the input is empty and pass the provided array and a size of zero")
+    SECTION("The read operation should finish instantaneously when the input is empty")
     {
-        std::uint8_t valueToSend = 42;
-        bool valueReceived = false;
-        std::uint8_t * dataReceived = nullptr;
-        int sizeReceived = -1;
+        std::uint8_t readBuffer[1] = {0};
 
-        auto op = async::connect(
-            spi.read(&valueToSend, 0),
-            async::addSchedulerToReceiver(
-                scheduler,
-                async::receiveValue([&](std::uint8_t * data, std::uint32_t size) { 
-                    valueReceived = true; 
-                    dataReceived = data;
-                    sizeReceived = size;
-                })));
-        async::start(op);
+        auto outcome = async::executeSync(scheduler, spi.read(readBuffer, 0));
 
-        REQUIRE(valueReceived);
-        REQUIRE(dataReceived == &valueToSend);
-        REQUIRE(sizeReceived == 0);
+        REQUIRE(outcome == async::makeSuccess<SpiError>());
         REQUIRE(!reg::bitIsSet(mockSpi, board::spi::CR2::RXNEIE));
     }
 
     SECTION("The read operation should be able to read one byte")
     {
+        bool valueReceived = false;
         std::uint8_t readBuffer[1] = {0};
-        std::uint8_t * dataReceived = nullptr;
-        int sizeReceived = -1;
+        setFieldValue(mockSpi, board::spi::DR::DR, 0x24U);
+        setRegisterBit(mockSpi, board::spi::SR::RXNE);
 
         auto op = async::connect(
             spi.read(readBuffer, 1),
             async::addSchedulerToReceiver(
                 scheduler,
-                async::receiveValue([&](std::uint8_t * data, std::uint32_t size) { 
-                    dataReceived = data;
-                    sizeReceived = size;
-                })));
+                async::receiveValue([&]() { valueReceived = true; })));
 
-        setFieldValue(mockSpi, board::spi::DR::DR, 0x24U);
-        setRegisterBit(mockSpi, board::spi::SR::RXNE);
-        async::start(op);
-
+        op.start();
         spiInterruptEvent.raise();
         spiInterruptEvent.raise();
 
         REQUIRE(readBuffer[0] == 0x24);
-        REQUIRE(sizeReceived == 1);
+        REQUIRE(valueReceived);
         REQUIRE(!reg::bitIsSet(mockSpi, board::spi::CR2::RXNEIE));
     }
 }
