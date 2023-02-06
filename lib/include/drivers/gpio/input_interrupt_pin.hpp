@@ -18,7 +18,7 @@ namespace drivers::gpio
 
     namespace detail
     {
-        template<class R, class GpioX, class Exti, std::uint8_t pinNo>
+        template <class R, class GpioX, class Exti, std::uint8_t pinNo>
         class WhenChangedOperation : public async::EventHandlerImpl<WhenChangedOperation<R, GpioX, Exti, pinNo>>
         {
             enum State
@@ -27,14 +27,12 @@ namespace drivers::gpio
                 RECEIVED_TRUE,
                 RECEIVED_FALSE
             };
-            
-        public:
-            template<class R2>
-            WhenChangedOperation(R2 && receiver, const async::EventEmitter & interruptEvent) 
-            : receiver_(static_cast<R2&&>(receiver))
-            , interruptEvent_(interruptEvent) 
-            { 
 
+        public:
+            template <class R2>
+            WhenChangedOperation(R2 &&receiver, const async::EventEmitter &interruptEvent)
+                : receiver_(static_cast<R2 &&>(receiver)), interruptEvent_(interruptEvent)
+            {
             }
 
             void start()
@@ -70,7 +68,7 @@ namespace drivers::gpio
             {
                 bool value = reg::read(GpioX{}, board::gpio::IDR::IDR[uint8_c<pinNo>]);
                 reg::set(Exti{}, board::exti::PR::PR[uint8_c<pinNo>]);
-                
+
                 /*if (state_ == State::WAITING_FOR_VALUE)
                 {
                     auto & s = async::getScheduler(receiver_);
@@ -98,26 +96,26 @@ namespace drivers::gpio
         };
     }
 
-    template<class GpioX, class Exti, std::uint8_t portNo, std::uint8_t pinNo>
+    template <class GpioX, class Exti, std::uint8_t portNo, std::uint8_t pinNo>
     class InputInterruptPin
     {
         async::EventEmitter interruptEvent_;
 
     public:
-        InputInterruptPin(const async::EventEmitter & interruptSource) : interruptEvent_(interruptSource) { }
+        InputInterruptPin(const async::EventEmitter &interruptSource) : interruptEvent_(interruptSource) {}
 
         bool read()
-		{
-			return reg::read(GpioX{}, board::gpio::IDR::IDR[uint8_c<pinNo>]);
-		}
+        {
+            return reg::read(GpioX{}, board::gpio::IDR::IDR[uint8_c<pinNo>]);
+        }
 
         async::Stream<bool, GpioError> auto whenChanged()
         {
             return async::makeStream<bool, GpioError>(
-                [this]<typename R>(R && receiver) 
-                    -> detail::WhenChangedOperation<std::remove_cvref_t<R>, GpioX, Exti, pinNo> 
+                [this]<typename R>(R &&receiver)
+                    -> detail::WhenChangedOperation<std::remove_cvref_t<R>, GpioX, Exti, pinNo>
                 {
-                    return {static_cast<R&&>(receiver), interruptEvent_};
+                    return {static_cast<R &&>(receiver), interruptEvent_};
                 });
         }
 
@@ -149,5 +147,5 @@ namespace drivers::gpio
                     return value;
                 });
         }*/
-    };  
+    };
 }

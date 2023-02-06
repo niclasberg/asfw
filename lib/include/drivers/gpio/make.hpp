@@ -22,7 +22,7 @@ namespace drivers::gpio
 
 	// Output type
 	using OutType = board::gpio::OTYPER::OtyperVal;
-	
+
 	// Interrupt configuration
 	enum class Interrupt
 	{
@@ -68,21 +68,21 @@ namespace drivers::gpio
 
 	using board::gpio::MODER::ModerVal;
 
-    /**
-     * @brief Create an output gpio pin
-     **/
-	template<OutputPinConfig config>
+	/**
+	 * @brief Create an output gpio pin
+	 **/
+	template <OutputPinConfig config>
 	struct makeOutputPin_t
 	{
-		template<class Board>
+		template <class Board>
 		constexpr auto operator()(Board board) const
 		{
 			using board::gpio::MODER::ModerVal;
 			constexpr auto pinIndex = uint8_c<config.pin.pin>;
-			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>); 
+			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>);
 
 			gpioX.enable();
-            reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::OUTPUT>);
+			reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::OUTPUT>);
 			reg::write(gpioX, board::gpio::OSPEEDR::OSPEEDR[pinIndex], constant_c<config.speed>);
 			reg::write(gpioX, board::gpio::PUPDR::PUPDR[pinIndex], constant_c<config.pullUpDown>);
 			reg::write(gpioX, board::gpio::OTYPER::OT[pinIndex], constant_c<config.outType>);
@@ -91,60 +91,60 @@ namespace drivers::gpio
 		}
 	};
 
-	template<OutputPinConfig config>
+	template <OutputPinConfig config>
 	inline constexpr makeOutputPin_t<config> makeOutputPin{};
 
-	template<InputPinConfig config>
+	template <InputPinConfig config>
 	struct makeInputPin_t
 	{
-		template<class Board>
+		template <class Board>
 		constexpr auto operator()(Board board) const
 		{
 			using board::gpio::MODER::ModerVal;
 			constexpr auto pinIndex = uint8_c<config.pin.pin>;
-			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>); 
+			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>);
 
 			gpioX.enable();
-            reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::INPUT>);
+			reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::INPUT>);
 			reg::write(gpioX, board::gpio::PUPDR::PUPDR[pinIndex], constant_c<config.pullUpDown>);
 
 			return InputPin<decltype(gpioX), config.pin.port, config.pin.pin>{};
 		}
 	};
 
-	template<InputPinConfig config>
+	template <InputPinConfig config>
 	inline constexpr makeInputPin_t<config> makeInputPin{};
 
-	template<AnalogPinConfig config>
+	template <AnalogPinConfig config>
 	struct makeAnalogPin_t
 	{
-		template<class Board>
+		template <class Board>
 		constexpr void operator()(Board board) const
 		{
 			using board::gpio::MODER::ModerVal;
 			constexpr auto pinIndex = uint8_c<config.pin.pin>;
-			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>); 
-			
+			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>);
+
 			gpioX.enable();
-            reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::ANALOG>);
+			reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::ANALOG>);
 		}
 	};
 
-	template<AnalogPinConfig config>
-	inline constexpr makeAnalogPin_t<config> makeAnalogPin {};
+	template <AnalogPinConfig config>
+	inline constexpr makeAnalogPin_t<config> makeAnalogPin{};
 
-	template<AltFnPinConfig config>
+	template <AltFnPinConfig config>
 	struct makeAltFnPin_t
 	{
-		template<class Board>
+		template <class Board>
 		constexpr void operator()(Board board) const
 		{
 			using board::gpio::MODER::ModerVal;
 			constexpr auto pinIndex = uint8_c<config.pin.pin>;
-			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>); 
-			
+			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>);
+
 			gpioX.enable();
-            reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::ALTERNATE_FUNCTION>);
+			reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::ALTERNATE_FUNCTION>);
 			reg::write(gpioX, board::gpio::OSPEEDR::OSPEEDR[pinIndex], constant_c<config.speed>);
 			reg::write(gpioX, board::gpio::PUPDR::PUPDR[pinIndex], constant_c<config.pullUpDown>);
 			reg::write(gpioX, board::gpio::OTYPER::OT[pinIndex], constant_c<config.outType>);
@@ -152,41 +152,41 @@ namespace drivers::gpio
 		}
 	};
 
-	template<AltFnPinConfig config>
-	inline constexpr makeAltFnPin_t<config> makeAltFnPin {};
-	
+	template <AltFnPinConfig config>
+	inline constexpr makeAltFnPin_t<config> makeAltFnPin{};
+
 	namespace detail
 	{
-		template<std::uint8_t pin>
-        constexpr auto getInterrupt(uint8_<pin>)
-        {
+		template <std::uint8_t pin>
+		constexpr auto getInterrupt(uint8_<pin>)
+		{
 			static_assert(pin < 16, "Invalid pin number (should be < 16)");
-            if constexpr (pin == 0)
-                return board::Interrupts::EXTI0;
-            else if constexpr (pin == 1)
-                return board::Interrupts::EXTI1;
-            else if constexpr (pin == 2)
-                return board::Interrupts::EXTI2;
-            else if constexpr (pin == 3)
-                return board::Interrupts::EXTI3;
-            else if constexpr (pin == 4)
-                return board::Interrupts::EXTI4;
-            else if constexpr (pin <= 9)
-                return board::Interrupts::EXTI9_5;
+			if constexpr (pin == 0)
+				return board::Interrupts::EXTI0;
+			else if constexpr (pin == 1)
+				return board::Interrupts::EXTI1;
+			else if constexpr (pin == 2)
+				return board::Interrupts::EXTI2;
+			else if constexpr (pin == 3)
+				return board::Interrupts::EXTI3;
+			else if constexpr (pin == 4)
+				return board::Interrupts::EXTI4;
+			else if constexpr (pin <= 9)
+				return board::Interrupts::EXTI9_5;
 			else if constexpr (pin <= 16)
-            	return board::Interrupts::EXTI15_10;
-        }
+				return board::Interrupts::EXTI15_10;
+		}
 	}
 
-	template<InputInterruptPinConfig config>
-	struct makeInputInterruptPin_t 
+	template <InputInterruptPinConfig config>
+	struct makeInputInterruptPin_t
 	{
-		template<class Board>
+		template <class Board>
 		constexpr auto operator()(Board board) const
 		{
 			using board::gpio::MODER::ModerVal;
 			constexpr auto pinIndex = uint8_c<config.pin.pin>;
-			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>); 
+			constexpr auto gpioX = board.getPeripheral(PeripheralTypes::GPIO<config.pin.port>);
 			constexpr auto exti = board.getPeripheral(PeripheralTypes::EXTI);
 			constexpr auto syscfg = board.getPeripheral(PeripheralTypes::SYSCFG);
 
@@ -194,37 +194,37 @@ namespace drivers::gpio
 			syscfg.enable();
 			exti.enable();
 
-            reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::INPUT>);
+			reg::write(gpioX, board::gpio::MODER::MODER[pinIndex], constant_c<ModerVal::INPUT>);
 			reg::write(gpioX, board::gpio::PUPDR::PUPDR[pinIndex], constant_c<config.pullUpDown>);
 			reg::write(syscfg, board::syscfg::EXTICR::EXTI[pinIndex], uint32_c<config.pin.port>);
 
 			if constexpr (config.interrupt == Interrupt::RISING_EDGE)
 			{
 				reg::set(exti, board::exti::RTSR::TR[pinIndex]);
-                reg::clear(exti, board::exti::FTSR::TR[pinIndex]);
+				reg::clear(exti, board::exti::FTSR::TR[pinIndex]);
 			}
 			else if constexpr (config.interrupt == Interrupt::FALLING_EDGE)
 			{
 				reg::clear(exti, board::exti::RTSR::TR[pinIndex]);
-                reg::set(exti, board::exti::FTSR::TR[pinIndex]);
+				reg::set(exti, board::exti::FTSR::TR[pinIndex]);
 			}
 			else
 			{
 				reg::set(exti, board::exti::RTSR::TR[pinIndex]);
-                reg::set(exti, board::exti::FTSR::TR[pinIndex]);
+				reg::set(exti, board::exti::FTSR::TR[pinIndex]);
 			}
 
 			constexpr auto interrupt = detail::getInterrupt(pinIndex);
 			board.enableIRQ(interrupt);
 
 			return InputInterruptPin<
-				decltype(gpioX), 
-				decltype(exti),  
-				config.pin.port, 
+				decltype(gpioX),
+				decltype(exti),
+				config.pin.port,
 				config.pin.pin>(board.getInterruptEvent(interrupt));
 		}
 	};
 
-	template<InputInterruptPinConfig config>
+	template <InputInterruptPinConfig config>
 	inline constexpr makeInputInterruptPin_t<config> makeInputInterruptPin{};
 }
