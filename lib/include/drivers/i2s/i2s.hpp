@@ -8,36 +8,35 @@
 
 namespace drivers::i2s
 {
-    template<class SpiX>
+    template <class SpiX>
     class I2S
     {
     public:
-        explicit I2S(const async::EventEmitter & interruptSource) : interruptSource_(interruptSource) { }
+        explicit I2S(const async::EventEmitter &interruptSource) : interruptSource_(interruptSource) {}
         I2S(const I2S &) = delete;
         I2S(I2S &&) = default;
-        I2S & operator=(const I2S &) = delete;
-        I2S & operator=(I2S &&) = delete;
+        I2S &operator=(const I2S &) = delete;
+        I2S &operator=(I2S &&) = delete;
 
         /**
          * Write data to the peripheral in non-blocking (interrupt) mode.
-         * 
+         *
          * @param data Array of data to write
          * @param size Array size
          * @return true on success, false otherwise
          */
-        async::Future<void, spi::SpiError> auto write(std::uint16_t * data, std::uint32_t size)
+        async::Future<void, spi::SpiError> auto write(std::uint16_t *data, std::uint32_t size)
         {
             return async::makeFuture<void, spi::SpiError>(
-                [this, data, size]<typename R>(R && receiver) -> 
-                    spi::detail::WriteOperation<SpiX, std::uint16_t, spi::detail::WriteOperationType::TX_ONLY_I2S, std::remove_cvref_t<R>>
+                [this, data, size]<typename R>(R &&receiver) -> spi::detail::WriteOperation<SpiX, std::uint16_t, spi::detail::WriteOperationType::TX_ONLY_I2S, std::remove_cvref_t<R>>
                 {
-                    return {static_cast<R&&>(receiver), interruptSource_, data, size};
+                    return {static_cast<R &&>(receiver), interruptSource_, data, size};
                 });
         }
 
-        template<dma::DmaLike Dma, std::invocable<std::uint16_t *, std::uint32_t> F>
+        template <dma::DmaLike Dma, std::invocable<std::uint16_t *, std::uint32_t> F>
         async::Future<void, spi::SpiError> auto writeContinuous(
-            Dma & dmaDevice, std::uint16_t * data[2], std::uint32_t size, F && callback)
+            Dma &dmaDevice, std::uint16_t *data[2], std::uint32_t size, F &&callback)
         {
             return spi::detail::writeDoubleBufferedDma(SpiX{}, dmaDevice, data, size);
         }
@@ -48,11 +47,11 @@ namespace drivers::i2s
         /**
          * Start a double buffered dma transmission to the peripheral. The transmission will
          * continue indefinetly.
-         * 
+         *
          * @param dmaDev Dma device to use. Must be configured in memory to peripheral mode and double buffer mode.
          * @param data Data buffers
          * @param size Data buffer size
-         * @param callback Callback that is called whenever one of the buffers becomes available. The 
+         * @param callback Callback that is called whenever one of the buffers becomes available. The
          * empty buffer is passed along with the buffer size.
          * @return true on success, false otherwise
          */
